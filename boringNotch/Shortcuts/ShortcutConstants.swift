@@ -5,7 +5,6 @@
 //  Created by Richard Kunkli on 16/08/2024.
 //
 
-import KeyboardShortcuts
 import SwiftUI
 
 extension KeyboardShortcuts.Name {

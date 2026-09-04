@@ -6,8 +6,6 @@
 //
 
 import SwiftUI
-import Defaults
-
 extension Color {
     static var effectiveAccent: Color {
         if Defaults[.useCustomAccentColor],

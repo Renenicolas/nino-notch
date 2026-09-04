@@ -1,5 +1,4 @@
 import Cocoa
-import Defaults
 import Foundation
 import IOKit.ps
 import SwiftUI

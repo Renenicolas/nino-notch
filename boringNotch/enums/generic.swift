@@ -6,8 +6,6 @@
 //
 
 import Foundation
-import Defaults
-
 public enum Style {
     case notch
     case floating

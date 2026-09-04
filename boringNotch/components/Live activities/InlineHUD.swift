@@ -6,8 +6,6 @@
 //
 
 import SwiftUI
-import Defaults
-
 struct InlineHUD: View {
     @EnvironmentObject var vm: BoringViewModel
     @Binding var type: SneakContentType
@@ -153,10 +151,3 @@ struct InlineHUD: View {
     }
 }
 
-#Preview {
-    InlineHUD(type: .constant(.brightness), value: .constant(0.4), icon: .constant(""), hoverAnimation: .constant(false), gestureProgress: .constant(0))
-        .padding(.horizontal, 8)
-        .background(Color.black)
-        .padding()
-        .environmentObject(BoringViewModel())
-}

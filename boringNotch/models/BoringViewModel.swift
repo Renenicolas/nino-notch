@@ -6,7 +6,6 @@
 //
 
 import Combine
-import Defaults
 import SwiftUI
 
 class BoringViewModel: NSObject, ObservableObject {

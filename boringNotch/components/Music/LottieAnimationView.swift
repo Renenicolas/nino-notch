@@ -6,8 +6,6 @@
 //
 
 import SwiftUI
-import Defaults
-
 struct LottieAnimationContainer: View {
     @Default(.selectedVisualizer) var selectedVisualizer
     var body: some View {
@@ -19,6 +17,3 @@ struct LottieAnimationContainer: View {
     }
 }
 
-#Preview {
-    LottieAnimationContainer()
-}

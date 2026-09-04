@@ -87,6 +87,3 @@ struct FluidSlider: View {
     }
 }
 
-#Preview {
-    FluidSlider()
-}

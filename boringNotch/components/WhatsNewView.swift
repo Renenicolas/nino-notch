@@ -30,6 +30,3 @@ struct WhatsNewView: View {
     }
 }
 
-#Preview {
-    WhatsNewView(isPresented: .constant(true))
-}

@@ -98,6 +98,3 @@ struct BoringExtrasMenu : View {
 }
 
 
-#Preview {
-    BoringExtrasMenu(vm: .init())
-}

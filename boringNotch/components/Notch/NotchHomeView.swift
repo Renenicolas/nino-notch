@@ -7,7 +7,6 @@
 //
 
 import Combine
-import Defaults
 import SwiftUI
 
 // MARK: - Music Player Components

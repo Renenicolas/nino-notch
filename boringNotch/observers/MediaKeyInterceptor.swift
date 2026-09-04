@@ -7,7 +7,6 @@
 import Foundation
 import AppKit
 import ApplicationServices
-import Defaults
 import AVFoundation
 
 private let kSystemDefinedEventType = CGEventType(rawValue: 14)!

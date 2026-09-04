@@ -1,7 +1,5 @@
 import Foundation
 import Cocoa
-import AsyncXPCConnection
-
 final class XPCHelperClient: NSObject {
     nonisolated static let shared = XPCHelperClient()
     

@@ -7,9 +7,6 @@
 
 import Foundation
 import Combine
-import Defaults
-import MacroVisionKit
-
 @MainActor
 final class FullscreenMediaDetector: ObservableObject {
     static let shared = FullscreenMediaDetector()
@@ -35,7 +32,7 @@ final class FullscreenMediaDetector: ObservableObject {
         }
     }
     
-    private func updateStatus(with spaces: [MacroVisionKit.FullScreenMonitor.SpaceInfo]) {
+    private func updateStatus(with spaces: [FullScreenMonitor.SpaceInfo]) {
         var newStatus: [String: Bool] = [:]
         
         for space in spaces {

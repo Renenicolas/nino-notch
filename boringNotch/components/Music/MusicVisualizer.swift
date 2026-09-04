@@ -118,8 +118,3 @@ struct AudioSpectrumView: NSViewRepresentable {
     }
 }
 
-#Preview {
-    AudioSpectrumView(isPlaying: .constant(true))
-        .frame(width: 16, height: 20)
-        .padding()
-}

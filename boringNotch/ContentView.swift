@@ -8,11 +8,7 @@
 
 import AVFoundation
 import Combine
-import Defaults
-import KeyboardShortcuts
 import SwiftUI
-import SwiftUIIntrospect
-
 @MainActor
 struct ContentView: View {
     @EnvironmentObject var vm: BoringViewModel
@@ -651,10 +647,3 @@ struct GeneralDropTargetDelegate: DropDelegate {
     }
 }
 
-#Preview {
-    let vm = BoringViewModel()
-    vm.open()
-    return ContentView()
-        .environmentObject(vm)
-        .frame(width: vm.notchSize.width, height: vm.notchSize.height)
-}

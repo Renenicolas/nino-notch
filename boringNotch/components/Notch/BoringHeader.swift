@@ -5,7 +5,6 @@
 //  Created by Harsh Vardhan  Goswami  on 04/08/24.
 //
 
-import Defaults
 import SwiftUI
 
 struct BoringHeader: View {
@@ -112,6 +111,3 @@ struct BoringHeader: View {
     }
 }
 
-#Preview {
-    BoringHeader().environmentObject(BoringViewModel())
-}

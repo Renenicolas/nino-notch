@@ -57,7 +57,3 @@ struct ProgressIndicator: View {
     }
 }
 
-#Preview {
-    ProgressIndicator(type: .circle, progress: 0.8, color: Color.blue).padding()
-        .frame(width: 200, height: 200)
-}

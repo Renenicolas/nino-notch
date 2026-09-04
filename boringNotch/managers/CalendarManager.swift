@@ -5,7 +5,6 @@
 //  Created by Harsh Vardhan  Goswami  on 08/09/24.
 //
 
-import Defaults
 import EventKit
 import SwiftUI
 

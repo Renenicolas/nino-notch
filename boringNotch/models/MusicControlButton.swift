@@ -5,8 +5,6 @@
 //  Created by Alexander on 2025-11-16.
 //
 
-import Defaults
-
 enum MusicControlButton: String, CaseIterable, Identifiable, Codable, Defaults.Serializable {
     case shuffle
     case previous

@@ -21,6 +21,3 @@ struct EmptyStateView: View {
     }
 }
 
-#Preview {
-    EmptyStateView(message: "Play some music babies")
-}

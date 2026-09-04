@@ -6,8 +6,6 @@
 //
 
 import Cocoa
-import SkyLightWindow
-import Defaults
 import Combine
 
 extension SkyLightOperator {

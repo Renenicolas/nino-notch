@@ -119,8 +119,3 @@ struct NotchShape: Shape {
     }
 }
 
-#Preview {
-    NotchShape(topCornerRadius: 6, bottomCornerRadius: 14)
-        .frame(width: 200, height: 32)
-        .padding(10)
-}

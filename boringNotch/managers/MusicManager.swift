@@ -6,7 +6,6 @@
 //
 import AppKit
 import Combine
-import Defaults
 import SwiftUI
 
 let defaultImage: NSImage = .init(

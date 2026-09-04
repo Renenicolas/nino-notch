@@ -6,8 +6,6 @@
 //
 
 import Foundation
-import Defaults
-
 public protocol ImageServiceProtocol {
     func fetchImageData(from url: URL) async throws -> Data
 }

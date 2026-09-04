@@ -50,6 +50,3 @@ struct TabSelectionView: View {
     }
 }
 
-#Preview {
-    BoringHeader().environmentObject(BoringViewModel())
-}

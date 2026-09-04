@@ -6,14 +6,8 @@
 //
 
 import AVFoundation
-import Defaults
 import EventKit
-import KeyboardShortcuts
-import LaunchAtLogin
-import Sparkle
 import SwiftUI
-import SwiftUIIntrospect
-
 struct SettingsView: View {
     @State private var selectedTab = "General"
     @State private var accentColorUpdateTrigger = UUID()
@@ -1794,6 +1788,3 @@ func warningBadge(_ text: String, _ description: String) -> some View {
     }
 }
 
-#Preview {
-    HUD()
-}

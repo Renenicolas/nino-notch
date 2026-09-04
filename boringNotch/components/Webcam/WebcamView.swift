@@ -6,7 +6,6 @@
 //
 
 import AVFoundation
-import Defaults
 import SwiftUI
 
 struct CameraPreviewView: View {
@@ -113,6 +112,3 @@ struct CameraPreviewLayerView: NSViewRepresentable {
     }
 }
 
-#Preview {
-    CameraPreviewView(webcamManager: .shared)
-}

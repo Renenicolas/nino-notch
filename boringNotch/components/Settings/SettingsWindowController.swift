@@ -7,9 +7,6 @@
 
 import AppKit
 import SwiftUI
-import Defaults
-import Sparkle
-
 class SettingsWindowController: NSWindowController {
     static let shared = SettingsWindowController()
     private var updaterController: SPUStandardUpdaterController?

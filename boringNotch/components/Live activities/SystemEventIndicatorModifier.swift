@@ -6,8 +6,6 @@
     //
 
 import SwiftUI
-import Defaults
-
 struct SystemEventIndicatorModifier: View {
     @EnvironmentObject var vm: BoringViewModel
     @Binding var eventType: SneakContentType

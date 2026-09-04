@@ -5,7 +5,6 @@
 //  Created by Alexander on 2025-11-17.
 //
 
-import Defaults
 import SwiftUI
 import UniformTypeIdentifiers
 

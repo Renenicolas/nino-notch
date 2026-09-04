@@ -7,9 +7,6 @@
 
 import AVFoundation
 import Combine
-import Defaults
-import KeyboardShortcuts
-import Sparkle
 import SwiftUI
 
 @main

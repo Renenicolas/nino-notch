@@ -53,3 +53,7 @@ build/
 *.xcarchive
 *.dSYM
 
+
+# Keep shared schemes (needed for xcodebuild -scheme)
+!boringNotch.xcodeproj/xcshareddata/xcschemes/
+!boringNotch.xcodeproj/xcshareddata/xcschemes/*.xcscheme

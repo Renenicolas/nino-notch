@@ -7,8 +7,6 @@
 
 import AppKit
 import SwiftUI
-import Defaults
-
 import QuickLook
 
 struct ShelfItemView: View {

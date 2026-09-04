@@ -152,7 +152,3 @@ extension View where Self: Shape {
     }
 }
 
-#Preview {
-    HelloAnimation(onFinish: {})
-        .frame(width: 300, height: 100)
-}

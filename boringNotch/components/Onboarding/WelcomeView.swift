@@ -6,8 +6,6 @@
 //
 
 import SwiftUI
-import SwiftUIIntrospect
-
 struct WelcomeView: View {
     var onGetStarted: (() -> Void)? = nil
     var body: some View {
@@ -80,6 +78,3 @@ struct WelcomeView: View {
     }
 }
 
-#Preview {
-    WelcomeView()
-}

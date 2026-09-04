@@ -5,7 +5,6 @@
 //  Created by Harsh Vardhan  Goswami  on 08/09/24.
 //
 
-import Defaults
 import SwiftUI
 
 struct Config: Equatable {
@@ -472,9 +471,3 @@ struct ReminderToggle: View {
     }
 }
 
-#Preview {
-    CalendarView()
-        .frame(width: 215, height: 130)
-        .background(.black)
-        .environmentObject(BoringViewModel())
-}
