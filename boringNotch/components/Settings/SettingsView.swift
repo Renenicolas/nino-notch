@@ -864,7 +864,7 @@ struct About: View {
                 HStack(spacing: 30) {
                     Spacer(minLength: 0)
                     Button {
-                        if let url = URL(string: "https://github.com/TheBoredTeam/boring.notch") {
+                        if let url = URL(string: "https://github.com/Renenicolas/nino-notch") {
                             NSWorkspace.shared.open(url)
                         }
                     } label: {
@@ -883,7 +883,7 @@ struct About: View {
             }
             VStack(spacing: 0) {
                 Divider()
-                Text("Made with 🫶🏻 by not so boring not.people")
+                Text("Nino Notch — The AI that runs your growth.\nBased on Boring Notch by TheBoredTeam (GPLv3).")
                     .foregroundStyle(.secondary)
                     .padding(.top, 5)
                     .padding(.bottom, 7)

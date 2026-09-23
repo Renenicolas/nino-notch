@@ -16,7 +16,7 @@ struct BoringLargeButtons: View {
             action:action,
             label: {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 12.0).fill(.black).frame(width: 70, height: 70)
+                    RoundedRectangle(cornerRadius: 12.0).fill(NinoTheme.panel).frame(width: 70, height: 70)
                     VStack(spacing: 8) {
                         icon.resizable()
                             .aspectRatio(contentMode: .fit).frame(width:20)
@@ -43,7 +43,7 @@ struct BoringExtrasMenu : View {
     var github: some View {
         BoringLargeButtons(
             action: {
-                if let url = URL(string: "https://github.com/TheBoredTeam/boring.notch") {
+                if let url = URL(string: "https://github.com/Renenicolas/nino-notch") {
                     NSWorkspace.shared.open(url)
                 }
             },
@@ -59,7 +59,7 @@ struct BoringExtrasMenu : View {
             }
         }) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12.0).fill(.black).frame(width: 70, height: 70)
+                RoundedRectangle(cornerRadius: 12.0).fill(NinoTheme.panel).frame(width: 70, height: 70)
                 VStack(spacing: 8) {
                     Image(systemName: "gear").resizable()
                         .aspectRatio(contentMode: .fit).frame(width:20)

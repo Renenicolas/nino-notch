@@ -140,7 +140,7 @@ struct MusicControlsView: View {
     private func songInfo(width: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             MarqueeText(
-                $musicManager.songTitle, font: .headline, nsFont: .headline, textColor: .white,
+                $musicManager.songTitle, font: .headline, nsFont: .headline, textColor: NinoTheme.text,
                 frameWidth: width)
             MarqueeText(
                 $musicManager.artistName,
@@ -148,7 +148,7 @@ struct MusicControlsView: View {
                 nsFont: .headline,
                 textColor: Defaults[.playerColorTinting]
                     ? Color(nsColor: musicManager.avgColor)
-                        .ensureMinimumBrightness(factor: 0.6) : .gray,
+                        .ensureMinimumBrightness(factor: 0.6) : NinoTheme.sub,
                 frameWidth: width
             )
             .fontWeight(.medium)
@@ -176,7 +176,7 @@ struct MusicControlsView: View {
                         .constant(line),
                         font: .subheadline,
                         nsFont: .subheadline,
-                        textColor: musicManager.isFetchingLyrics ? .gray.opacity(0.7) : .gray,
+                        textColor: musicManager.isFetchingLyrics ? NinoTheme.dim.opacity(0.7) : NinoTheme.dim,
                         frameWidth: width
                     )
                     .font(isPersian ? .custom("Vazirmatn-Regular", size: NSFont.preferredFont(forTextStyle: .subheadline).pointSize) : .subheadline)
@@ -345,7 +345,7 @@ struct VolumeControlView: View {
             }) {
                 Image(systemName: volumeIcon)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(musicManager.volumeControlSupported ? .white : .gray)
+                    .foregroundColor(musicManager.volumeControlSupported ? NinoTheme.text : NinoTheme.dim)
             }
             .buttonStyle(PlainButtonStyle())
             .disabled(!musicManager.volumeControlSupported)
@@ -355,7 +355,7 @@ struct VolumeControlView: View {
                 CustomSlider(
                     value: $volumeSliderValue,
                     range: 0.0...1.0,
-                    color: .white,
+                    color: NinoTheme.text,
                     dragging: $dragging,
                     lastDragged: .constant(Date.distantPast),
                     onValueChange: { newValue in
@@ -528,7 +528,7 @@ struct MusicSliderView: View {
 struct CustomSlider: View {
     @Binding var value: Double
     var range: ClosedRange<Double>
-    var color: Color = .white
+    var color: Color = NinoTheme.text
     @Binding var dragging: Bool
     @Binding var lastDragged: Date
     var onValueChange: ((Double) -> Void)?
@@ -545,7 +545,7 @@ struct CustomSlider: View {
 
             ZStack(alignment: .leading) {
                 Rectangle()
-                    .fill(.gray.opacity(0.3))
+                    .fill(NinoTheme.dim.opacity(0.3))
                     .frame(height: height)
 
                 Rectangle()

@@ -96,11 +96,11 @@ struct ContentView: View {
                         : cornerRadiusInsets.closed.bottom
                     )
                     .padding([.horizontal, .bottom], vm.notchState == .open ? 12 : 0)
-                    .background(.black)
+                    .background(NinoTheme.bg)
                     .clipShape(currentNotchShape)
                     .overlay(alignment: .top) {
                         Rectangle()
-                            .fill(.black)
+                            .fill(NinoTheme.bg)
                             .frame(height: 1)
                             .padding(.horizontal, topCornerRadius)
                     }
@@ -260,11 +260,11 @@ struct ContentView: View {
                             HStack {
                                 Text(batteryModel.statusText)
                                     .font(.subheadline)
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(NinoTheme.text)
                             }
 
                             Rectangle()
-                                .fill(.black)
+                                .fill(NinoTheme.bg)
                                 .frame(width: vm.closedNotchSize.width + 10)
 
                             HStack {
@@ -323,10 +323,10 @@ struct ContentView: View {
                                   HStack(alignment: .center) {
                                       Image(systemName: "music.note")
                                       GeometryReader { geo in
-                                          MarqueeText(.constant(musicManager.songTitle + " - " + musicManager.artistName),  textColor: Defaults[.playerColorTinting] ? Color(nsColor: musicManager.avgColor).ensureMinimumBrightness(factor: 0.6) : .gray, minDuration: 1, frameWidth: geo.size.width)
+                                          MarqueeText(.constant(musicManager.songTitle + " - " + musicManager.artistName),  textColor: Defaults[.playerColorTinting] ? Color(nsColor: musicManager.avgColor).ensureMinimumBrightness(factor: 0.6) : NinoTheme.sub, minDuration: 1, frameWidth: geo.size.width)
                                       }
                                   }
-                                  .foregroundStyle(.gray)
+                                  .foregroundStyle(NinoTheme.sub)
                                   .padding(.bottom, 10)
                               }
                           }
@@ -371,7 +371,7 @@ struct ContentView: View {
                         height: max(0, vm.effectiveClosedNotchHeight - 12)
                     )
                 Rectangle()
-                    .fill(.black)
+                    .fill(NinoTheme.bg)
                     .frame(width: vm.closedNotchSize.width - 20)
                 MinimalFaceFeatures()
             }
@@ -398,7 +398,7 @@ struct ContentView: View {
                 )
 
             Rectangle()
-                .fill(.black)
+                .fill(NinoTheme.bg)
                 .overlay(
                     HStack(alignment: .top) {
                         if coordinator.expandingView.show

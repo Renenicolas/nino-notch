@@ -6,7 +6,7 @@ export SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platf
 xcodebuild \
   -project boringNotch.xcodeproj \
   -scheme boringNotch \
-  -configuration Debug \
+  -configuration Release \
   -destination 'platform=macOS,arch=arm64' \
   -derivedDataPath build/DerivedData \
   CODE_SIGNING_ALLOWED=NO \

@@ -15,7 +15,7 @@ struct BoringHeader: View {
     var body: some View {
         HStack(spacing: 0) {
             HStack {
-                if (!tvm.isEmpty || coordinator.alwaysShowTabs) && Defaults[.boringShelf] {
+                if showTabs {
                     TabSelectionView()
                 } else if vm.notchState == .open {
                     EmptyView()
@@ -28,7 +28,7 @@ struct BoringHeader: View {
 
             if vm.notchState == .open {
                 Rectangle()
-                    .fill(NSScreen.screen(withUUID: coordinator.selectedScreenUUID)?.safeAreaInsets.top ?? 0 > 0 ? .black : .clear)
+                    .fill(NSScreen.screen(withUUID: coordinator.selectedScreenUUID)?.safeAreaInsets.top ?? 0 > 0 ? NinoTheme.bg : .clear)
                     .frame(width: vm.closedNotchSize.width)
                     .mask {
                         NotchShape()
@@ -46,11 +46,11 @@ struct BoringHeader: View {
                                 vm.toggleCameraPreview()
                             }) {
                                 Capsule()
-                                    .fill(.black)
+                                    .fill(NinoTheme.panel)
                                     .frame(width: 30, height: 30)
                                     .overlay {
                                         Image(systemName: "web.camera")
-                                            .foregroundColor(.white)
+                                            .foregroundColor(NinoTheme.text)
                                             .padding()
                                             .imageScale(.medium)
                                     }
@@ -65,11 +65,11 @@ struct BoringHeader: View {
                                 
                             }) {
                                 Capsule()
-                                    .fill(.black)
+                                    .fill(NinoTheme.panel)
                                     .frame(width: 30, height: 30)
                                     .overlay {
                                         Image(systemName: "gear")
-                                            .foregroundColor(.white)
+                                            .foregroundColor(NinoTheme.text)
                                             .padding()
                                             .imageScale(.medium)
                                     }
@@ -97,8 +97,13 @@ struct BoringHeader: View {
             .blur(radius: vm.notchState == .closed ? 20 : 0)
             .zIndex(2)
         }
-        .foregroundColor(.gray)
+        .foregroundColor(NinoTheme.dim)
         .environmentObject(vm)
+    }
+
+    private var showTabs: Bool {
+        let showShelfTabs = Defaults[.boringShelf] && (!tvm.isEmpty || coordinator.alwaysShowTabs)
+        return showShelfTabs
     }
 
     func isHUDType(_ type: SneakContentType) -> Bool {
