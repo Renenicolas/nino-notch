@@ -5,7 +5,7 @@ import SwiftUI
 /// Used by `NinoTests` and by `--nino-module-self-test`.
 /// Keep this the single list so the two runners cannot drift.
 enum NinoModuleContract {
-    static let expectedIDs: Set<String> = ["nino.voice", "nino.vellum", "nino.search", "nino.screen"]
+    static let expectedIDs: Set<String> = ["nino.voice", "nino.search", "nino.screen"]
 
     @MainActor
     static func run() -> (failed: Int, lines: [String]) {

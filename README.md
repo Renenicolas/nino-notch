@@ -2,7 +2,7 @@
 
 **Nino Notch** is a Nino-branded macOS notch shell. Nino is *The AI that runs your growth.*
 
-It sits in the MacBook notch. Upstream features (music control, HUD replacement, shelf, calendar, camera) work as-is. On top, a **Nino** tab hosts plug-in modules through one protocol, so Nino Voice, Vellum (Nino Assistant), AI Search and Screen Control can be wired in later by editing one file each. Today all four are placeholder stubs.
+It sits in the MacBook notch. Upstream features (music control, HUD replacement, shelf, calendar, camera) work as-is. On top, a **Nino** tab hosts plug-in modules through one protocol, so Nino Voice, AI Search and Screen Control can be wired in later by editing one file each. Today all three are placeholder stubs.
 
 ## License and credit (required)
 
@@ -15,15 +15,15 @@ Upstream license: **GNU GPLv3**. `LICENSE` and `THIRD_PARTY_LICENSES` are unchan
 - Nino name, bundle id `com.meetnino.notch`, gold-on-black palette, placeholder icon
 - `NinoModule` protocol + registry + a switcher in the notch's Nino tab
 - Four stub modules, all marked **STUB**, all off by default, no network, no secrets:
-  Nino Voice, Vellum, AI Search, Screen Control
+  Nino Voice, AI Search, Screen Control
 
 To wire a real module, read [WIRE-IN.md](WIRE-IN.md).
 
 ## Screenshots (notch open, Nino tab)
 
-| Nino Voice | Vellum |
-|---|---|
-| ![Nino Voice](docs/screenshots/nino-tab-voice.png) | ![Vellum](docs/screenshots/nino-tab-vellum.png) |
+| Nino Voice |
+|---|
+| ![Nino Voice](docs/screenshots/nino-tab-voice.png) |
 
 | AI Search | Screen Control |
 |---|---|
