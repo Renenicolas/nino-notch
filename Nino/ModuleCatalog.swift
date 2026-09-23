@@ -7,7 +7,7 @@ enum ModuleCatalog {
     static var all: [any NinoModule] {
         [
             NinoVoiceModule(),
-            AISearchModule(),
+            AskNinoModule(),
             ScreenControlModule(),
         ]
     }

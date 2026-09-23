@@ -10,6 +10,13 @@ enum NinoTheme {
     static let sub = Color(red: 194 / 255, green: 188 / 255, blue: 171 / 255) // #c2bcab secondary text
     static let dim = Color(red: 143 / 255, green: 138 / 255, blue: 122 / 255) // #8f8a7a tertiary / disabled
 
+    // From Nino Voice's palette (nino-os/components/studio/tokens.ts). Gold is the
+    // same #d4a853 in both; these three had no notch equivalent, so they join it.
+    // Its ink #070609 / cream #f6f3ec map onto bg / text above (Rene's notch spec wins on the notch).
+    static let gold2 = Color(red: 238 / 255, green: 208 / 255, blue: 138 / 255) // #eed08a highlight
+    static let goldDim = Color(red: 156 / 255, green: 118 / 255, blue: 40 / 255) // #9c7628
+    static let border = gold.opacity(0.14) // hairline around panels
+
     static let productName = "Nino Notch"
     static let positioning = "The AI that runs your growth."
 

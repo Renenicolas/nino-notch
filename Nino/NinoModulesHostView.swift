@@ -4,9 +4,16 @@ import SwiftUI
 /// module's panel. Same layout idea as the Home / Shelf tabs above it.
 struct NinoModulesHostView: View {
     @ObservedObject var registry = NinoModuleRegistry.shared
+    @ObservedObject private var voice = NinoVoiceLink.shared
+
+    /// Ask Nino opened from its key gets the whole panel: answers need the room.
+    private var focused: Bool {
+        voice.state?.ask.visible == true && NinoVoiceLink.holdsNotchOpen && registry.selected?.id == "nino.search"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if !focused {
             HStack(spacing: 4) {
                 ForEach(registry.modules, id: \.id) { module in
                     let isSelected = registry.selected?.id == module.id
@@ -27,7 +34,10 @@ struct NinoModulesHostView: View {
                 }
             }
 
+            }
+
             if let module = registry.selected {
+                if !focused {
                 HStack(spacing: 6) {
                     Text(module.displayName)
                         .font(.subheadline.weight(.semibold))
@@ -45,6 +55,7 @@ struct NinoModulesHostView: View {
                     Text(registry.isEnabled(module.id) ? "On" : "Off")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(registry.isEnabled(module.id) ? NinoTheme.gold : NinoTheme.dim)
+                }
                 }
                 module.panel
             } else {

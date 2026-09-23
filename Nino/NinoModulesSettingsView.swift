@@ -9,7 +9,7 @@ struct NinoModulesSettingsView: View {
             Section {
                 Text(NinoTheme.positioning)
                     .foregroundStyle(NinoTheme.sub)
-                Text("The Nino tab in the notch always lists every module. On/Off is the module’s activation state. A stub does nothing either way: no login, no network, no secrets.")
+                Text("The Nino tab lists every module. Nino Voice: On runs the voice engine (hotkeys, dictation, paste). Ask Nino: On shows answers in the notch. Stubs do nothing either way.")
                     .font(.caption)
                     .foregroundStyle(NinoTheme.sub)
             } header: {
@@ -39,7 +39,7 @@ struct NinoModulesSettingsView: View {
                     .tint(NinoTheme.gold)
                 }
             } header: {
-                Text("Modules (all off until you flip them)")
+                Text("Modules")
             }
         }
         .formStyle(.grouped)

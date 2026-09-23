@@ -4,8 +4,8 @@ import Combine
 /// Holds every registered Nino module, which one is selected in the notch,
 /// and each module's on/off state.
 ///
-/// Enable flags live in UserDefaults under `nino.module.enabled.<id>` and
-/// default to false (UserDefaults.bool returns false when the key is missing).
+/// Enable flags live in UserDefaults under `nino.module.enabled.<id>`.
+/// Live modules default on, stubs default off.
 @MainActor
 final class NinoModuleRegistry: ObservableObject {
     static let shared = NinoModuleRegistry()
@@ -24,6 +24,7 @@ final class NinoModuleRegistry: ObservableObject {
 
     func register(_ module: any NinoModule) {
         guard !modules.contains(where: { $0.id == module.id }) else { return }
+        defaults.register(defaults: [Self.enabledKey(for: module.id): !module.isStub])
         modules.append(module)
     }
 

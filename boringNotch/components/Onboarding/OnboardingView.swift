@@ -15,6 +15,7 @@ enum OnboardingStep {
     case remindersPermission
     case accessibilityPermission
     case musicPermission
+    case ninoVoice
     case finished
 }
 
@@ -129,6 +130,33 @@ struct OnboardingView: View {
                     onContinue: {
                         withAnimation(.easeInOut(duration: 0.6)) {
                             BoringViewCoordinator.shared.firstLaunch = false
+                            step = .ninoVoice
+                        }
+                    }
+                )
+                .transition(.opacity)
+
+            case .ninoVoice:
+                // Nino Voice's own permissions (mic, Accessibility) belong to its engine
+                // app, so the engine asks; its full welcome flow opens if never done.
+                PermissionRequestView(
+                    icon: Image(systemName: "mic.fill"),
+                    title: "Set up Nino Voice",
+                    description: "Talk anywhere and Nino types it where your cursor is. Right Option talks, Right Command asks Nino. The voice engine needs the microphone and Accessibility (to paste and to hear the keys).",
+                    privacyNote: "Speech is transcribed on this Mac. Nothing is sent anywhere unless a mode you pick uses an online model.",
+                    onAllow: {
+                        let link = NinoVoiceLink.shared
+                        if link.state?.setup.onboarded == false {
+                            link.send("openOnboarding")
+                        } else {
+                            link.send("requestPermissions")
+                        }
+                        withAnimation(.easeInOut(duration: 0.6)) {
+                            step = .finished
+                        }
+                    },
+                    onSkip: {
+                        withAnimation(.easeInOut(duration: 0.6)) {
                             step = .finished
                         }
                     }

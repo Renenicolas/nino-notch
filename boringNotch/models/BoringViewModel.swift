@@ -201,6 +201,10 @@ class BoringViewModel: NSObject, ObservableObject {
         if SharingStateManager.shared.preventNotchClose {
             return
         }
+        // Ask Nino is open: only Esc / its close button closes the notch.
+        if NinoVoiceLink.holdsNotchOpen {
+            return
+        }
         self.notchSize = getClosedNotchSize(screenUUID: self.screenUUID)
         self.closedNotchSize = self.notchSize
         self.notchState = .closed

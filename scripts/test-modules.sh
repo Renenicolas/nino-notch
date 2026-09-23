@@ -1,12 +1,11 @@
 #!/bin/zsh
-# Module contract check: source rules, compile, then RUN the checks.
+# Module contract: source rules, then run the checks INSIDE the built app
+# (the live modules need app types, so there is no standalone test binary).
+# Run scripts/build.sh first.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-export SDKROOT=/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk
-SWIFTC=/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc
-OUT=/tmp/nino-module-tests
-rm -f "$OUT"
+APP=build/DerivedData/Build/Products/Release/NinoNotch.app
+RECEIPT=/tmp/nino-module-selftest.txt
 
 if grep -R -E -n 'URLSession|URLRequest|WKWebView|AVCapture|http://|https://' Nino/Stubs --include='*.swift'; then
   echo "FAIL: a stub file talks to the network or a capture device"; exit 1
@@ -19,10 +18,16 @@ for f in Nino/Stubs/*.swift; do
 done
 echo "ok  every stub is isStub = true and has a wire-in TODO"
 
-# NinoModulePreview.swift needs app types (AppDelegate), so it is left out here.
-"$SWIFTC" -sdk "$SDKROOT" -target arm64-apple-macosx14.0 -parse-as-library -emit-executable \
-  $(ls Nino/*.swift | grep -v NinoModulePreview) Nino/Stubs/*.swift NinoTests/main.swift -o "$OUT"
-echo "ok  module contract compiled ($OUT)"
+# The contract itself checks that the old nino.vellum id is rejected, so skip it here.
+if grep -R -i -n 'vellum' Nino README.md WIRE-IN.md | grep -v NinoModuleContract.swift; then
+  echo "FAIL: Vellum is still mentioned"; exit 1
+fi
+echo "ok  no Vellum left in the app or docs"
 
+[ -x "$APP/Contents/MacOS/NinoNotch" ] || { echo "FAIL: build first (scripts/build.sh)"; exit 1; }
+rm -f "$RECEIPT"
 # perl alarm = portable timeout; a hang is a failure, not a pass
-perl -e 'alarm 120; exec @ARGV' "$OUT"
+perl -e 'alarm 60; exec @ARGV' "$APP/Contents/MacOS/NinoNotch" --nino-module-self-test >/dev/null 2>&1 || true
+[ -f "$RECEIPT" ] || { echo "FAIL: self-test wrote no receipt"; exit 1; }
+cat "$RECEIPT"
+grep -q '^ALL TESTS PASSED$' "$RECEIPT"

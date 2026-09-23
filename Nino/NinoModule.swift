@@ -22,22 +22,33 @@ protocol NinoModule {
     var panel: AnyView { get }
 }
 
-/// Shared frame for stub modules: your placeholder UI, then one honest note
-/// about what is not wired yet.
-struct NinoStubPanel<Content: View>: View {
-    let note: String
+/// The framed box every module panel sits in.
+struct NinoCard<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             content
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(NinoTheme.panel)
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NinoTheme.border, lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+/// A stub's placeholder UI plus one honest note about what is not wired yet.
+struct NinoStubPanel<Content: View>: View {
+    let note: String
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        NinoCard {
+            content
             Text(note)
                 .font(.caption2)
                 .foregroundStyle(NinoTheme.dim)
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(NinoTheme.panel)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }

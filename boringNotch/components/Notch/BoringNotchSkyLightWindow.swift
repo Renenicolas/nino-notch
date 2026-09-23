@@ -31,6 +31,10 @@ extension SkyLightOperator {
 
 class BoringNotchSkyLightWindow: NSPanel {
     private var isSkyLightEnabled: Bool = false
+
+    /// Ask Nino needs typing. Everything else (dictation above all) must leave the
+    /// keyboard with the app underneath, so this is off unless Ask Nino is showing.
+    nonisolated(unsafe) static var ninoAllowsKeyFocus = false
     
     override init(
         contentRect: NSRect,
@@ -107,6 +111,6 @@ class BoringNotchSkyLightWindow: NSPanel {
     
     private var observers: Set<AnyCancellable> = []
     
-    override var canBecomeKey: Bool { false }
+    override var canBecomeKey: Bool { Self.ninoAllowsKeyFocus }
     override var canBecomeMain: Bool { false }
 }

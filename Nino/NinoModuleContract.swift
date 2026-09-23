@@ -1,11 +1,15 @@
 import Foundation
 import SwiftUI
 
-/// Shared checks for the module contract.
-/// Used by `NinoTests` and by `--nino-module-self-test`.
-/// Keep this the single list so the two runners cannot drift.
+/// The module contract, run inside the real app by `--nino-module-self-test`
+/// (scripts/test-modules.sh does that after a build).
 enum NinoModuleContract {
     static let expectedIDs: Set<String> = ["nino.voice", "nino.search", "nino.screen"]
+    static let liveIDs: Set<String> = ["nino.voice", "nino.search"]
+
+    /// One real state line as the Nino Voice engine sends it (NinoNotchBridge).
+    /// If the engine's shape changes, this decode fails here first.
+    static let sampleEngineState = #"{"type":"state","recording":"recording","panelVisible":true,"hostedInNotch":true,"partial":"hello","lastText":"","modeName":"Dictation","modelName":"Parakeet V3","recordKey":"Right ⌥","askKey":"Right ⌘","pasteKey":"Fn","ask":{"visible":true,"busy":false,"canSend":true,"status":"Done","failed":null,"draft":"","messages":[{"id":"1","role":"user","text":"hi"},{"id":"2","role":"assistant","text":"**yo**"}]},"setup":{"onboarded":true,"microphone":true,"accessibility":false}}"#
 
     @MainActor
     static func run() -> (failed: Int, lines: [String]) {
@@ -31,8 +35,8 @@ enum NinoModuleContract {
         ModuleCatalog.install(into: registry)
 
         expect(registry.modules.count == expectedIDs.count, "catalog installs \(expectedIDs.count) modules")
-        expect(Set(registry.modules.map(\.id)) == expectedIDs, "stable ids match the stubs")
-        expect(registry.modules.allSatisfy(\.isStub), "every catalog module is a stub")
+        expect(Set(registry.modules.map(\.id)) == expectedIDs, "stable ids: voice, search, screen (no vellum)")
+        expect(Set(registry.modules.filter { !$0.isStub }.map(\.id)) == liveIDs, "voice and Ask Nino are live, screen is a stub")
         expect(
             registry.modules.allSatisfy { !$0.displayName.isEmpty && !$0.summary.isEmpty && !$0.systemImage.isEmpty },
             "names, summaries and icons are non-empty"
@@ -41,15 +45,14 @@ enum NinoModuleContract {
         expect(registry.selected?.id == "nino.voice", "first module is selected by default")
         registry.select("nino.search")
         expect(registry.selected?.id == "nino.search", "select switches the shown module")
-        registry.select("nino.nope")
-        expect(registry.selected?.id == "nino.search", "selecting an unknown id is ignored")
+        registry.select("nino.vellum")
+        expect(registry.selected?.id == "nino.search", "vellum id is unknown now and ignored")
 
-        expect(registry.enabledModules.isEmpty, "all modules off by default")
-        registry.setEnabled("nino.voice", enabled: true)
-        expect(registry.isEnabled("nino.voice"), "enable flip sticks")
-        expect(registry.enabledModules.map(\.id) == ["nino.voice"], "only the flipped module is enabled")
+        expect(Set(registry.enabledModules.map(\.id)) == liveIDs, "live modules default on, stubs default off")
         registry.setEnabled("nino.voice", enabled: false)
-        expect(!registry.hasEnabledModules, "disable flip sticks")
+        expect(!registry.isEnabled("nino.voice"), "voice can be switched off")
+        registry.setEnabled("nino.voice", enabled: true)
+        expect(registry.isEnabled("nino.voice"), "and back on")
 
         struct Extra: NinoModule {
             let id = "nino.test.extra"
@@ -61,9 +64,14 @@ enum NinoModuleContract {
         }
         registry.register(Extra())
         expect(registry.modules.count == expectedIDs.count + 1, "registering a new module needs no core edit")
-        expect(!registry.isEnabled("nino.test.extra"), "new modules are off until enabled")
+        expect(!registry.isEnabled("nino.test.extra"), "new stub modules are off until enabled")
         registry.register(Extra())
         expect(registry.modules.count == expectedIDs.count + 1, "duplicate id is ignored")
+
+        let state = try? JSONDecoder().decode(NinoVoiceState.self, from: Data(sampleEngineState.utf8))
+        expect(state != nil, "engine state line decodes")
+        expect(state?.isCapturing == true && state?.ask.messages.count == 2, "decoded recording + ask messages")
+        expect(state?.setup.isComplete == false, "missing accessibility shows as setup incomplete")
 
         return (failed, lines)
     }
