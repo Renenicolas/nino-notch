@@ -48,6 +48,9 @@ struct SettingsView: View {
                 NavigationLink(value: "Shortcuts") {
                     Label("Shortcuts", systemImage: "keyboard")
                 }
+                NavigationLink(value: "Nino modules") {
+                    Label("Nino modules", systemImage: "puzzlepiece.extension")
+                }
                 // NavigationLink(value: "Extensions") {
                 //     Label("Extensions", systemImage: "puzzlepiece.extension")
                 // }
@@ -81,6 +84,8 @@ struct SettingsView: View {
                     Shelf()
                 case "Shortcuts":
                     Shortcuts()
+                case "Nino modules":
+                    NinoModulesSettingsView()
                 case "Extensions":
                     GeneralSettings()
                 case "Advanced":

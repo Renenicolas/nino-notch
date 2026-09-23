@@ -25,6 +25,7 @@ public enum NotchState {
 public enum NotchViews: Hashable {
     case home
     case shelf
+    case modules
 }
 
 enum SettingsEnum {

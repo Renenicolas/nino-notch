@@ -20,6 +20,9 @@ struct DynamicNotchApp: App {
     init() {
         updaterController = SPUStandardUpdaterController(
             startingUpdater: false, updaterDelegate: nil, userDriverDelegate: nil)
+        ModuleCatalog.install(into: .shared)
+        NinoModuleSelfTest.runIfRequested()
+        NinoModulePreview.applyIfRequested()
 
         // Initialize the settings window controller with the updater controller
         SettingsWindowController.shared.setUpdaterController(updaterController)
@@ -46,6 +49,8 @@ struct DynamicNotchApp: App {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    /// SwiftUI wraps NSApp.delegate, so expose the real instance for Nino dev hooks.
+    private(set) static weak var shared: AppDelegate?
     var statusItem: NSStatusItem?
     var windows: [String: NSWindow] = [:] // UUID -> NSWindow
     var viewModels: [String: BoringViewModel] = [:] // UUID -> BoringViewModel
@@ -276,6 +281,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppDelegate.shared = self
 
         NotificationCenter.default.addObserver(
             self,

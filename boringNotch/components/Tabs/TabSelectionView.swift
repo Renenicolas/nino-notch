@@ -16,6 +16,7 @@ struct TabModel: Identifiable {
 
 struct TabSelectionView: View {
     @ObservedObject var coordinator = BoringViewCoordinator.shared
+    @ObservedObject var registry = NinoModuleRegistry.shared
     @Namespace var animation
 
     private var ninoTabs: [TabModel] {
@@ -23,6 +24,9 @@ struct TabSelectionView: View {
             TabModel(label: "Home", icon: "house.fill", view: .home),
             TabModel(label: "Shelf", icon: "tray.fill", view: .shelf),
         ]
+        if !registry.modules.isEmpty {
+            items.append(TabModel(label: "Nino", icon: "sparkles", view: .modules))
+        }
         return items
     }
     var body: some View {

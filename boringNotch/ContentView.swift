@@ -345,6 +345,8 @@ struct ContentView: View {
                         NotchHomeView(albumArtNamespace: albumArtNamespace)
                     case .shelf:
                         ShelfView()
+                    case .modules:
+                        NinoModulesHostView()
                     }
                 }
                 .transition(

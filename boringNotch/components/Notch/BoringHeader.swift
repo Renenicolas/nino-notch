@@ -11,6 +11,7 @@ struct BoringHeader: View {
     @EnvironmentObject var vm: BoringViewModel
     @ObservedObject var batteryModel = BatteryStatusViewModel.shared
     @ObservedObject var coordinator = BoringViewCoordinator.shared
+    @ObservedObject var registry = NinoModuleRegistry.shared
     @StateObject var tvm = ShelfStateViewModel.shared
     var body: some View {
         HStack(spacing: 0) {
@@ -103,7 +104,7 @@ struct BoringHeader: View {
 
     private var showTabs: Bool {
         let showShelfTabs = Defaults[.boringShelf] && (!tvm.isEmpty || coordinator.alwaysShowTabs)
-        return showShelfTabs
+        return showShelfTabs || !registry.modules.isEmpty
     }
 
     func isHUDType(_ type: SneakContentType) -> Bool {
