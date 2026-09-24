@@ -46,6 +46,12 @@ voice engine and runs headless: no dock icon, no menu bar icon, no notch popup.
 - Ask Nino does take it: while it is open the notch window may become key,
   the notch stays open on hover-out, and Esc or the close button gives the
   keyboard back.
+- Right ⌘ is one-press voice: the engine opens Ask Nino (as before) and Nino
+  Notch immediately sends `toggleRecord` to listen. A second Right ⌘ is caught
+  by Nino Notch (global key monitor, needs its Accessibility grant) and sends
+  `toggleRecord` again to stop; the engine ignores Right ⌘ while recording, so
+  they never fight. Spoken words route on their own: commands to Screen
+  Control, everything else to Ask Nino. No Nino Voice change was needed.
 
 ## Settings and first launch
 

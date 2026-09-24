@@ -90,6 +90,16 @@ enum NinoModuleContract {
         registry.register(Extra())
         expect(registry.modules.count == expectedIDs.count + 1, "duplicate id is ignored")
 
+        // One-press Right ⌘: only the second press (or the 2-minute cap) stops it.
+        var stops = 0
+        let t0 = Date()
+        let session = AskListenSession(onFinished: { stops += 1 })
+        session.start(now: t0)
+        for i in 0..<100 { session.tick(now: t0.addingTimeInterval(Double(i))) }   // 99 s, quiet or not
+        expect(stops == 0 && session.active, "listen: never stops on its own before 2 minutes")
+        session.tick(now: t0.addingTimeInterval(120))
+        expect(stops == 1 && !session.active, "listen: 2-minute safety cap")
+
         let state = try? JSONDecoder().decode(NinoVoiceState.self, from: Data(sampleEngineState.utf8))
         expect(state != nil, "engine state line decodes")
         expect(state?.isCapturing == true && state?.ask.messages.count == 2, "decoded recording + ask messages")

@@ -28,3 +28,18 @@ enum NinoModulePreview {
         }
     }
 }
+
+/// Dev: `NinoNotch.app --args --nino-screen-command "open Spotify"` runs one Screen
+/// Control command 3 s after launch (typed path; the spoken path is the Ask box).
+enum NinoScreenCommandFlag {
+    @MainActor
+    static func applyIfRequested() {
+        let args = CommandLine.arguments
+        guard let i = args.firstIndex(of: "--nino-screen-command"), i + 1 < args.count else { return }
+        let text = args[i + 1]
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            Task { await NinoScreenControl.shared.handle(text) }
+        }
+    }
+}
+

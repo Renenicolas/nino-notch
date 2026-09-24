@@ -94,7 +94,7 @@ struct ScreenControlPanel: View {
         command = ""
         Task {
             if !(await screen.handle(text)) {
-                link.send("askSend", text: text)  // not a screen command: Ask Nino answers it
+                link.sendTypedAsk(text)  // not a screen command: Ask Nino answers it
             }
         }
     }

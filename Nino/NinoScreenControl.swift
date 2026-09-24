@@ -36,6 +36,7 @@ final class NinoScreenControl: ObservableObject {
 
     @Published private(set) var entries: [Entry] = []
     @Published private(set) var busy = false
+    private static var askedForAccessibility = false
 
     var hasAccessibility: Bool { AXIsProcessTrusted() }
 
@@ -59,6 +60,13 @@ final class NinoScreenControl: ObservableObject {
         let decision = await Self.decide(text)
         guard let decision, !decision.steps.isEmpty else { return false }
 
+        // Clicking/pressing in other apps needs Accessibility; ask the first time a
+        // real command runs so the prompt appears when it matters.
+        if !AXIsProcessTrusted() && !Self.askedForAccessibility {
+            Self.askedForAccessibility = true
+            requestAccessibility()
+        }
+
         entry.decidedBy = decision.by
         entry.plan = decision.steps
         entries.insert(entry, at: 0)
@@ -77,7 +85,21 @@ final class NinoScreenControl: ObservableObject {
             entries[i].ok = allOK
         }
         NSLog("NINO screen: %@ -> %@ [%@] %@", text, decision.steps.map(\.action).joined(separator: ","), decision.by, notes.joined(separator: " | "))
+        Self.recordLast(text: text, decision: decision, notes: notes, ok: allOK)
         return true
+    }
+
+    /// Last result, for diagnosis: ~/Library/Application Support/com.meetnino.notch/screen-control-last.json
+    private static func recordLast(text: String, decision: Decision, notes: [String], ok: Bool) {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("com.meetnino.notch", isDirectory: true)
+        let record: [String: Any] = [
+            "at": ISO8601DateFormatter().string(from: Date()), "text": text, "decidedBy": decision.by,
+            "steps": decision.steps.map(\.action), "results": notes, "ok": ok,
+        ]
+        if let data = try? JSONSerialization.data(withJSONObject: record, options: [.prettyPrinted]) {
+            try? data.write(to: dir.appendingPathComponent("screen-control-last.json"))
+        }
     }
 
     // MARK: Decide
@@ -217,10 +239,11 @@ enum SpotifyControl {
         if let user = username { uris.insert("spotify:user:\(user):collection", at: 0) }
         for uri in uris {
             // The URI goes in as an argument, never spliced into script source.
-            if AppleScript.run("on run argv\ntell application \"Spotify\" to play track (item 1 of argv)\nend run", args: [uri]) != nil,
-               await isPlaying() {
-                return (true, "Spotify: playing Liked Songs")
-            }
+            guard AppleScript.run("on run argv\ntell application \"Spotify\" to play track (item 1 of argv)\nend run", args: [uri]) != nil else { continue }
+            if await isPlaying() { return (true, "Spotify: playing Liked Songs") }
+            // Spotify 1.3 can load the collection paused: press play once.
+            AppleScript.run("tell application \"Spotify\" to play")
+            if await isPlaying() { return (true, "Spotify: playing Liked Songs") }
         }
 
         // 2. Accessibility: open Liked Songs and press Spotify's own Play button.
@@ -230,7 +253,7 @@ enum SpotifyControl {
             return (false, "needs Accessibility for Nino Notch (prompt shown)")
         }
         NSWorkspace.shared.open(URL(string: "spotify:collection:tracks")!)
-        try? await Task.sleep(for: .seconds(2.5))
+        try? await Task.sleep(for: .seconds(3))
         guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first?.processIdentifier else {
             return (false, "Spotify not running")
         }
@@ -266,6 +289,11 @@ enum AXPress {
     /// Breadth-first search of an app's windows for a button by title/description; press it.
     static func firstButton(inApp pid: pid_t, named names: [String]) -> Bool {
         let app = AXUIElementCreateApplication(pid)
+        // Spotify is Chromium-based: its accessibility tree stays empty until an
+        // assistive app asks for it with AXManualAccessibility.
+        AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+        usleep(800_000)
         var queue: [AXUIElement] = [app]
         var visited = 0
         while !queue.isEmpty, visited < 4000 {
@@ -432,7 +460,13 @@ enum ClaudeCommandParser {
                 let process = Process()
                 process.executableURL = URL(fileURLWithPath: claude)
                 // haiku: a fixed-schema parse, and speed matters; the words go in on stdin.
-                process.arguments = ["-p", "--model", "haiku", "--output-format", "text"]
+                // No tools and an empty working folder: a parse must never read files,
+                // and anything it touched would raise permission prompts for Nino Notch.
+                process.arguments = ["-p", "--model", "haiku", "--output-format", "text",
+                                     "--disallowedTools", "Bash,Read,Edit,Write,Glob,Grep,WebFetch,WebSearch,Task,NotebookEdit"]
+                let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("nino-screen-claude", isDirectory: true)
+                try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+                process.currentDirectoryURL = scratch
                 var env = ProcessInfo.processInfo.environment
                 env["PATH"] = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:" + (env["PATH"] ?? "")
                 process.environment = env

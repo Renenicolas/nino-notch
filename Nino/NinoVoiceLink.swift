@@ -233,11 +233,15 @@ final class NinoVoiceLink: ObservableObject {
         switch envelope.type {
         case "meter":
             level = envelope.level ?? 0
+            if listen.active { listen.tick() }  // meter frames double as a clock
         case "state":
             guard let new = try? JSONDecoder().decode(NinoVoiceState.self, from: line) else { return }
             let wasAsking = state?.ask.visible == true
             let oldDraft = state?.ask.draft ?? ""
             state = new
+            if listen.active {
+                if new.recording == "recording" { listen.tick() } else { listen.stop() }
+            }
             if new.ask.visible, !new.ask.draft.isEmpty, new.ask.draft != oldDraft {
                 routeSpokenDraft(new.ask.draft)
             }
@@ -256,18 +260,71 @@ final class NinoVoiceLink: ObservableObject {
 
     // MARK: Screen Control hand-off
 
-    /// Words spoken into the Ask box: a screen command runs straight away
-    /// (hands-free); anything else stays in the box for Return, as before.
+    /// Words spoken into the Ask box go straight through, no Return:
+    /// a computer command runs in Screen Control, anything else goes to Ask Nino.
     private func routeSpokenDraft(_ text: String) {
+        listen.stop()
         Task {
-            if await NinoScreenControl.shared.handle(text) { showScreenResult() }
+            if await NinoScreenControl.shared.handle(text) {
+                showScreenResult()
+            } else {
+                sendTypedAsk(text)
+            }
         }
+    }
+
+    /// A question typed (or spoken) into Ask Nino. Marked so the ask box that this
+    /// opens does not start the microphone.
+    func sendTypedAsk(_ text: String) {
+        if state?.ask.visible != true { suppressAutoListen = true }
+        send("askSend", text: text)
+    }
+
+    /// Close the ask box. If it is still listening, cancel the recording too, so
+    /// the words are not pasted into whatever app is underneath.
+    func closeAsk() {
+        listen.stop()
+        send(state?.isCapturing == true ? "cancel" : "askClose")
     }
 
     /// Close the ask box and leave Screen Control selected, showing what happened.
     func showScreenResult() {
         NinoModuleRegistry.shared.select("nino.screen")
-        send("askClose")
+        closeAsk()
+    }
+
+    // MARK: One-press Right ⌘ (Ask Nino listens right away)
+
+    /// Set when Nino Notch itself opens the ask box to send typed text.
+    private var suppressAutoListen = false
+    private lazy var listen = AskListenSession(
+        onFinished: { [weak self] in self?.stopListening() }
+    )
+    private var rightCommandMonitor: Any?
+
+    /// Right ⌘ opened the ask box: start the microphone, the same engine call as
+    /// holding Right ⌥ into the open box. No Nino Voice change needed.
+    private func startListeningIfHotkey() {
+        defer { suppressAutoListen = false }
+        guard !suppressAutoListen, let s = state, s.recording == "idle", s.ask.messages.isEmpty else { return }
+        send("toggleRecord")
+        listen.start()
+    }
+
+    private func stopListening() {
+        guard listen.active else { return }
+        listen.stop()
+        if state?.recording == "recording" { send("toggleRecord") }
+    }
+
+    /// A second Right ⌘ press while Ask Nino is listening stops it. The engine
+    /// ignores Right ⌘ while it records, so the two never fight over the key.
+    private func watchRightCommand() {
+        guard rightCommandMonitor == nil else { return }
+        rightCommandMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { event in
+            guard event.keyCode == 54, event.modifierFlags.contains(.command) else { return }  // Right ⌘ down
+            Task { @MainActor in NinoVoiceLink.shared.stopListening() }
+        }
     }
 
     // MARK: Notch focus (Ask Nino owns the keyboard, dictation never does)
@@ -278,12 +335,15 @@ final class NinoVoiceLink: ObservableObject {
         BoringViewCoordinator.shared.currentView = .modules
         Self.holdsNotchOpen = true
         BoringNotchSkyLightWindow.ninoAllowsKeyFocus = true
+        watchRightCommand()
+        startListeningIfHotkey()
         guard let target = Self.notchTarget() else { return }
         target.vm.open()
         target.window?.makeKey()
     }
 
     private func hideAsk() {
+        listen.stop()
         guard Self.holdsNotchOpen else { return }
         Self.holdsNotchOpen = false
         releaseKeyFocus()
@@ -305,5 +365,30 @@ final class NinoVoiceLink: ObservableObject {
             return (vm, app.windows[uuid])
         }
         return (app.vm, app.window)
+    }
+}
+
+/// One Ask Nino listening session. Rene's rule (2026-09-24): Right ⌘ starts it and
+/// Right ⌘ again stops and sends. No auto-stop on quiet; the only extra is a
+/// 2-minute safety cap so a forgotten mic cannot record forever.
+@MainActor
+final class AskListenSession {
+    static let maxLength = 120.0
+
+    private(set) var active = false
+    private var startedAt = Date()
+    private let onFinished: () -> Void
+
+    init(onFinished: @escaping () -> Void) { self.onFinished = onFinished }
+
+    func start(now: Date = Date()) { active = true; startedAt = now }
+
+    func stop() { active = false }
+
+    /// Called on every engine update while recording; only enforces the cap.
+    func tick(now: Date = Date()) {
+        guard active, now.timeIntervalSince(startedAt) >= Self.maxLength else { return }
+        active = false
+        onFinished()
     }
 }

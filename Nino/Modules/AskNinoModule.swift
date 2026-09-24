@@ -47,7 +47,7 @@ struct AskNinoPanel: View {
                     .foregroundStyle(NinoTheme.text)
                     .focused($fieldFocused)
                     .onSubmit(send)
-                    .onExitCommand { link.send("askClose") }
+                    .onExitCommand { link.closeAsk() }
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
                     .background(NinoTheme.bg)
@@ -66,7 +66,7 @@ struct AskNinoPanel: View {
                 .disabled(!canSend)
 
                 if ask?.visible == true {
-                    Button { link.send("askClose") } label: {
+                    Button { link.closeAsk() } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(NinoTheme.sub)
@@ -88,8 +88,8 @@ struct AskNinoPanel: View {
             if !NinoVoiceLink.holdsNotchOpen { link.releaseKeyFocus() }
         }
         .onChange(of: ask?.draft ?? "") { _, spoken in
-            // Right-Option into the open box: the engine hands back the words.
-            if !spoken.isEmpty { draft = spoken }
+            // Spoken words arrive here, then go out on their own (Screen Control or Ask Nino).
+            draft = spoken
         }
         .onChange(of: ask?.visible ?? false) { _, visible in
             if visible { DispatchQueue.main.async { fieldFocused = true } }
@@ -105,8 +105,9 @@ struct AskNinoPanel: View {
     }
 
     private var placeholder: String {
-        if link.state?.recording == "recording", let partial = link.state?.partial, !partial.isEmpty {
-            return partial
+        if link.state?.recording == "recording" {
+            let partial = link.state?.partial ?? ""
+            return partial.isEmpty ? "Listening… press Right ⌘ to send" : partial
         }
         return "Ask Nino…"
     }
@@ -124,7 +125,7 @@ struct AskNinoPanel: View {
             if await NinoScreenControl.shared.handle(text) {
                 link.showScreenResult()
             } else {
-                link.send("askSend", text: text)
+                link.sendTypedAsk(text)
             }
         }
     }

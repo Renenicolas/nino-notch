@@ -23,6 +23,7 @@ struct DynamicNotchApp: App {
         ModuleCatalog.install(into: .shared)
         NinoModuleSelfTest.runIfRequested()
         NinoModulePreview.applyIfRequested()
+        NinoScreenCommandFlag.applyIfRequested()
 
         // Initialize the settings window controller with the updater controller
         SettingsWindowController.shared.setUpdaterController(updaterController)

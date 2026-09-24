@@ -104,14 +104,17 @@ so it opens the very same stores and preferences it always did. Checked against 
 Side effect of testing: about 8 test dictations were added to your history (two are blank, from the
 keychain-blocked polish runs). Delete them in History if you like.
 
-## D. Added 2026-09-24: launch fix, Jev, Screen Control
+## D. Added 2026-09-24: launch fix, signing, Jev, Screen Control, one-press Right ⌘
 
 | # | Capability | Where it lives | Verified |
 |---|---|---|---|
-| L1 | Double-click always shows Nino Notch | `Nino/NinoSingleInstance.swift`, `applicationShouldHandleReopen` | LIVE — root cause: every copy shares `com.meetnino.notch`, so macOS only re-activated the copy already running; with no window or dock icon that looked like nothing. Now a reopen opens the notch for 3 s (screenshot) |
-| L2 | Only one copy ever runs | `NinoSingleInstance.retireOlderCopies()` | LIVE — launching the build next to the installed copy left exactly one running; the engine came back by itself |
-| D1 | Jev (TypeSafe) intent decision | `TypeSafeJev` in `Nino/NinoScreenControl.swift` (POST api.typesafe.ai/v1/systemone, Noul + 2 Choice questions, confidence ≥ 0.75) | NOT VERIFIED live — TypeSafe signups are closed ("Whoops, we're full"), no key. Decision rule checked offline in the contract. Key goes in the keychain (`com.meetnino.notch.typesafe` / `api-key`) or `TYPESAFE_API_KEY` |
-| D2 | Claude CLI fallback (`claude -p --model haiku`) | `ClaudeCommandParser` | LIVE (CLI) — "open Spotify and play my Liked Songs" → `open_app Spotify`, `play_liked_songs` (12 s); a question → not a command |
-| D3 | Actions: open app, Liked Songs, play/pause/next/previous, volume, mute, open link | `NinoScreenControl.run`, `SpotifyControl`, `AXPress` | NOT VERIFIED live — needs a stable-signed install plus your Accessibility and Spotify-automation approval |
-| D4 | Voice path: Right ⌘, hold Right ⌥, say it → runs without Return | `NinoVoiceLink.routeSpokenDraft`, Ask Nino send | CODE — voice-to-text and the ask box are proven; the hand-off runs once D3 can |
-
+| L1 | Double-click always shows Nino Notch | `Nino/NinoSingleInstance.swift`, `applicationShouldHandleReopen` | LIVE — root cause: every copy shares `com.meetnino.notch`, so macOS only re-activated the copy already running, and a windowless app showed nothing. Installed `~/Applications/NinoNotch.app`: a Finder-style open launches it cold; a second open flashes the notch for 3 s |
+| L2 | Only one copy ever runs | `NinoSingleInstance.retireOlderCopies()` | LIVE — launching a second copy retired the first; the voice engine came back by itself |
+| G1 | Own signing identity for Nino Notch | "Nino Notch Signing" in `~/Library/Keychains/nino-notch-signing.keychain-db`; password only in the login keychain (`com.meetnino.notch.signing-keychain` / `nino-notch-signing`); `scripts/build.sh` reads it at build time | LIVE — locked, unlocked with the read-back password, signed; DR pinned to the certificate root; untrusted cert works, no trust prompt. `nino-signing.keychain-db` and Nino Voice's identity untouched |
+| D1 | Jev (TypeSafe) intent decision | `TypeSafeJev` in `Nino/NinoScreenControl.swift` | NOT VERIFIED live — TypeSafe signups closed ("Whoops, we're full"), no key. Decision rule checked offline in the contract |
+| D2 | Claude CLI fallback (`claude -p --model haiku`, no tools, empty working folder) | `ClaudeCommandParser` | LIVE — parsed "open Spotify and play my Liked Songs" into open_app + play_liked_songs |
+| D3 | Actions: open app, Liked Songs, play/pause/next/previous, volume, mute, web links | `NinoScreenControl.run`, `SpotifyControl`, `AXPress` | LIVE — Spotify went from paused to playing **Liked Songs** (947 songs) from the command; Spotify 1.3 needs `play` after loading the collection |
+| D4 | Spoken command → Screen Control, spoken question → Ask Nino, no Return | `NinoVoiceLink.routeSpokenDraft` | LIVE — spoken "Open Spotify and play my like songs" ran Screen Control and Liked Songs played. Speaker-to-mic tests with music playing in the room misheard words ("light songs"), which then correctly went to Ask Nino instead |
+| R1 | One-press Right ⌘: press opens Ask Nino and listens; press again stops and sends; 2-minute cap only | `NinoVoiceLink.startListeningIfHotkey`, `watchRightCommand`, `AskListenSession` | PARTIAL — the engine's Right ⌘ call (`askOpen`) made Nino Notch start listening at once and keep listening through silence; the stop it sends on the second press works. The physical key presses could not be made from this terminal (no permission to post key events) |
+| A1 | Ask Nino answers in the notch | engine → OpenClaw → Ask Nino tab | LIVE — "It's about 11:23 PM in Beirut right now." (12 s) |
+| A2 | OpenClaw Slack permission file on reno-mac | `~/.openclaw/nino-permissions.json` (restored byte-for-byte from reno-mini, 0600) | LIVE — never existed on reno-mac (machine-local, missed in the move); its absence only printed a warning that Ask Nino's error display showed in place of the real error |
