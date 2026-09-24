@@ -121,7 +121,9 @@ final class NinoScreenControl: ObservableObject {
         case .open_app:
             return await AppTarget.open(step.app ?? "") ? (true, "opened \(step.app ?? "")") : (false, "couldn't find \(step.app ?? "that app")")
         case .open_url:
-            guard let s = step.query, let url = URL(string: s.contains("://") ? s : "https://\(s)") else { return (false, "no link") }
+            // Web links only: a misheard command must not open file:// or app URL schemes.
+            guard let s = step.query, let url = URL(string: s.contains("://") ? s : "https://\(s)"),
+                  ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return (false, "only web links") }
             return NSWorkspace.shared.open(url) ? (true, "opened \(url.host ?? s)") : (false, "couldn't open link")
         case .play_liked_songs:
             return await SpotifyControl.playLikedSongs()
@@ -199,7 +201,9 @@ enum SpotifyControl {
         guard let text = try? String(contentsOfFile: prefs, encoding: .utf8) else { return nil }
         for key in ["autologin.canonical_username", "autologin.username"] {
             if let line = text.split(separator: "\n").first(where: { $0.hasPrefix(key + "=") }) {
-                return line.split(separator: "=", maxSplits: 1).last.map { String($0).trimmingCharacters(in: CharacterSet(charactersIn: "\"")) }
+                let name = line.split(separator: "=", maxSplits: 1).last.map { String($0).trimmingCharacters(in: CharacterSet(charactersIn: "\"")) }
+                // Spotify usernames are short and plain; anything else is ignored.
+                return name.flatMap { $0.range(of: "^[A-Za-z0-9._-]{1,64}$", options: .regularExpression) != nil ? $0 : nil }
             }
         }
         return nil
@@ -212,7 +216,9 @@ enum SpotifyControl {
         var uris = ["spotify:collection:tracks"]
         if let user = username { uris.insert("spotify:user:\(user):collection", at: 0) }
         for uri in uris {
-            if AppleScript.run("tell application \"Spotify\" to play track \"\(uri)\"") != nil, await isPlaying() {
+            // The URI goes in as an argument, never spliced into script source.
+            if AppleScript.run("on run argv\ntell application \"Spotify\" to play track (item 1 of argv)\nend run", args: [uri]) != nil,
+               await isPlaying() {
                 return (true, "Spotify: playing Liked Songs")
             }
         }
@@ -293,10 +299,12 @@ enum AppleScript {
     /// Runs through /usr/bin/osascript so a hung target app never blocks the notch.
     /// macOS attributes the Apple Event to Nino Notch (the responsible app).
     @discardableResult
-    static func run(_ source: String, timeout: TimeInterval = 8) -> String? {
+    /// `args` reach the script as `argv` (use `on run argv`), so outside values are
+    /// data, never code.
+    static func run(_ source: String, args: [String] = [], timeout: TimeInterval = 8) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", source]
+        process.arguments = ["-e", source] + args
         let out = Pipe()
         process.standardOutput = out
         process.standardError = Pipe()
