@@ -110,6 +110,8 @@ final class NinoVoiceLink: ObservableObject {
 
     /// One app, not two half-running: quitting Nino Notch stops its engine.
     func stopEngine() {
+        // A newer Nino Notch copy is taking over: leave the engine running for it.
+        guard NinoSingleInstance.otherCopies().isEmpty else { return }
         send("quit")
     }
 
@@ -234,7 +236,11 @@ final class NinoVoiceLink: ObservableObject {
         case "state":
             guard let new = try? JSONDecoder().decode(NinoVoiceState.self, from: line) else { return }
             let wasAsking = state?.ask.visible == true
+            let oldDraft = state?.ask.draft ?? ""
             state = new
+            if new.ask.visible, !new.ask.draft.isEmpty, new.ask.draft != oldDraft {
+                routeSpokenDraft(new.ask.draft)
+            }
             if !new.isCapturing { level = 0 }
             let isAsking = new.ask.visible && new.panelVisible && new.hostedInNotch
             if isAsking && !askEnabled {
@@ -246,6 +252,22 @@ final class NinoVoiceLink: ObservableObject {
         default:
             break
         }
+    }
+
+    // MARK: Screen Control hand-off
+
+    /// Words spoken into the Ask box: a screen command runs straight away
+    /// (hands-free); anything else stays in the box for Return, as before.
+    private func routeSpokenDraft(_ text: String) {
+        Task {
+            if await NinoScreenControl.shared.handle(text) { showScreenResult() }
+        }
+    }
+
+    /// Close the ask box and leave Screen Control selected, showing what happened.
+    func showScreenResult() {
+        NinoModuleRegistry.shared.select("nino.screen")
+        send("askClose")
     }
 
     // MARK: Notch focus (Ask Nino owns the keyboard, dictation never does)

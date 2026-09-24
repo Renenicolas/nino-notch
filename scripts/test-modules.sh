@@ -12,7 +12,7 @@ if grep -R -E -n 'URLSession|URLRequest|WKWebView|AVCapture|http://|https://' Ni
 fi
 echo "ok  stubs contain no network or capture APIs"
 
-for f in Nino/Stubs/*.swift; do
+for f in Nino/Stubs/*.swift(N); do  # (N): no stubs left is fine
   grep -q 'let isStub = true' "$f" || { echo "FAIL: $f is not marked isStub = true"; exit 1; }
   grep -q 'TODO: wire real integration here' "$f" || { echo "FAIL: $f has no wire-in TODO"; exit 1; }
 done

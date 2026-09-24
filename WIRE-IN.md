@@ -11,9 +11,9 @@ You never touch the notch core to add one.
 |---|---|---|---|
 | Nino Voice | `Nino/Modules/NinoVoiceModule.swift` | `nino.voice` | live |
 | Ask Nino | `Nino/Modules/AskNinoModule.swift` | `nino.search` | live |
-| Screen Control | `Nino/Stubs/ScreenControlModule.swift` | `nino.screen` | stub |
+| Screen Control | `Nino/Modules/ScreenControlModule.swift` | `nino.screen` | live |
 
-The two live modules are the worked example: they read `NinoVoiceLink.shared`
+The live modules are the worked example: they read `NinoVoiceLink.shared`
 (live state from the Nino Voice engine) and send it commands. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

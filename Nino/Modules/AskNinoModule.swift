@@ -118,8 +118,15 @@ struct AskNinoPanel: View {
     private func send() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSend else { return }
-        link.send("askSend", text: text)
         draft = ""
+        Task {
+            // A screen command ("open Spotify…") is done right here; anything else goes to Nino.
+            if await NinoScreenControl.shared.handle(text) {
+                link.showScreenResult()
+            } else {
+                link.send("askSend", text: text)
+            }
+        }
     }
 
     private func messageList(_ messages: [NinoVoiceState.Message]) -> some View {

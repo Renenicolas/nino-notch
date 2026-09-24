@@ -281,8 +281,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         window.alphaValue = 1
     }
 
+    /// Double-click while already running: there is no window or dock icon, so
+    /// show the notch for a moment to prove the app is alive.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        NinoSingleInstance.flashNotch(vm: vm, window: window)
+        return false
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppDelegate.shared = self
+        NinoSingleInstance.retireOlderCopies()
         NinoVoiceLink.shared.start()
 
         NotificationCenter.default.addObserver(

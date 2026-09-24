@@ -21,8 +21,10 @@ xcodebuild \
 # Makefile `make sign`); otherwise the build stays ad-hoc and says so.
 KC="$HOME/Library/Keychains/nino-signing.keychain-db"
 APP=build/DerivedData/Build/Products/Release/NinoNotch.app
-if [ -f "$KC" ] && codesign --force --deep --keychain "$KC" --sign "Nino Code Signing" "$APP" 2>/dev/null; then
+# perl alarm: a locked keychain pops a password dialog and codesign waits forever.
+if [ -f "$KC" ] && perl -e 'alarm 20; exec @ARGV' codesign --force --deep --keychain "$KC" --sign "Nino Code Signing" "$APP" 2>/dev/null; then
   codesign -dvv "$APP" 2>&1 | grep -E "^Authority=" | head -1
 else
+  codesign --force --deep --sign - "$APP" 2>/dev/null
   echo "note: signed ad-hoc (Nino Code Signing keychain missing or locked)"
 fi

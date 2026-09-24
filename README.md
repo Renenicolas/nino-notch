@@ -6,7 +6,7 @@ It is the **one** app in the MacBook notch. Upstream features (music control, HU
 
 - **Nino Voice** (live): talk anywhere, transcribed on this Mac, pasted where you type. The engine is Nino Voice (`~/dev/VoiceInk`), running headless; this tab and a small closed-notch indicator are its only screen.
 - **Ask Nino** (live): Right Command from any app, answered by OpenClaw with hands on this Mac.
-- **Screen Control** (stub): placeholder until it is wired.
+- **Screen Control** (live): say or type "open Spotify and play my Liked Songs"; Jev decides fast (when a TypeSafe key is set), Claude CLI takes the rest, and the Mac does it.
 
 How the two apps fit together: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -20,7 +20,7 @@ Upstream license: **GNU GPLv3**. `LICENSE` and `THIRD_PARTY_LICENSES` are unchan
 
 - Nino name, bundle id `com.meetnino.notch`, gold-on-black palette, placeholder icon
 - `NinoModule` protocol + registry + a switcher in the notch's Nino tab
-- Live Nino Voice and Ask Nino modules backed by the Nino Voice engine, one stub (Screen Control)
+- Live Nino Voice, Ask Nino and Screen Control modules
 
 To add or wire a module, read [WIRE-IN.md](WIRE-IN.md).
 
@@ -30,7 +30,7 @@ To add or wire a module, read [WIRE-IN.md](WIRE-IN.md).
 |---|---|
 | ![Nino Voice](docs/screenshots/nino-tab-voice.png) | ![Ask Nino](docs/screenshots/nino-tab-ask.png) |
 
-| Screen Control (stub) |
+| Screen Control (screenshot from before it went live) |
 |---|
 | ![Screen Control](docs/screenshots/nino-tab-screen.png) |
 
