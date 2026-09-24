@@ -68,6 +68,13 @@ final class NinoVoiceLink: ObservableObject {
     /// 0...1 mic level while recording.
     @Published private(set) var level: Double = 0
 
+    /// What the Ask box is doing right now, for the notch to show.
+    enum AskStage: Equatable { case none, listening, thinking, done(String) }
+    @Published private(set) var stage: AskStage = .none
+    /// Answers produced in Nino Notch itself (instant time, Haiku quick answers).
+    @Published private(set) var localMessages: [NinoVoiceState.Message] = []
+    private var autoCloseTask: Task<Void, Never>?
+
     /// Ask Nino is up: hover-out must not close the notch (Esc or the close button does).
     /// Static + nonisolated so `BoringViewModel.close()` can check it from any context.
     nonisolated(unsafe) private(set) static var holdsNotchOpen = false
@@ -237,6 +244,7 @@ final class NinoVoiceLink: ObservableObject {
         case "state":
             guard let new = try? JSONDecoder().decode(NinoVoiceState.self, from: line) else { return }
             let wasAsking = state?.ask.visible == true
+            let sawItOpen = state != nil  // the box opened while we watched (not already open when we connected)
             let oldDraft = state?.ask.draft ?? ""
             state = new
             if listen.active {
@@ -251,7 +259,7 @@ final class NinoVoiceLink: ObservableObject {
                 send("askClose")  // Ask Nino is switched off in Settings
                 return
             }
-            if isAsking && !wasAsking { showAsk() }
+            if isAsking && !wasAsking { showAsk(listen: sawItOpen) }
             if !isAsking && wasAsking { hideAsk() }
         default:
             break
@@ -264,33 +272,112 @@ final class NinoVoiceLink: ObservableObject {
     /// a computer command runs in Screen Control, anything else goes to Ask Nino.
     private func routeSpokenDraft(_ text: String) {
         listen.stop()
+        routeAsk(text)
+    }
+
+    /// Typed or spoken, the same order: computer command (instant rules, then AI)
+    /// → Screen Control; time in a city → answered here; short question → Haiku,
+    /// streamed; anything else → the full Nino agent.
+    func routeAsk(_ text: String) {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        autoCloseTask?.cancel()
+        stage = .thinking
+        firstWordsAt = nil
+        let started = Date()
         Task {
             if await NinoScreenControl.shared.handle(text) {
                 showScreenResult()
-            } else {
+                return
+            }
+            let route = QuickAnswer.route(text)
+            defer { Self.recordAsk(text: text, route: route, started: started, firstWords: firstWordsAt) }
+            switch route {
+            case .local(let answer):
+                firstWordsAt = Date()
+                openAskBoxQuietly()
+                localMessages += [.init(id: UUID().uuidString, role: "user", text: text),
+                                  .init(id: UUID().uuidString, role: "assistant", text: answer)]
+                stage = .none
+            case .fast:
+                openAskBoxQuietly()
+                let answerID = UUID().uuidString
+                localMessages += [.init(id: UUID().uuidString, role: "user", text: text)]
+                let answer = await QuickAnswer.streamFast(text) { [weak self] soFar in
+                    guard let self else { return }
+                    if self.firstWordsAt == nil { self.firstWordsAt = Date() }
+                    self.stage = .none
+                    if let i = self.localMessages.firstIndex(where: { $0.id == answerID }) {
+                        self.localMessages[i] = .init(id: answerID, role: "assistant", text: soFar)
+                    } else {
+                        self.localMessages.append(.init(id: answerID, role: "assistant", text: soFar))
+                    }
+                }
+                if answer == nil {
+                    // Haiku unavailable: hand it to the full agent instead.
+                    localMessages.removeAll { $0.id == answerID }
+                    sendTypedAsk(text)
+                } else {
+                    stage = .none
+                }
+            case .agent:
                 sendTypedAsk(text)
+                stage = .none  // the engine shows its own "Thinking" until the agent answers
             }
         }
     }
 
-    /// A question typed (or spoken) into Ask Nino. Marked so the ask box that this
-    /// opens does not start the microphone.
+    private var firstWordsAt: Date?
+
+    /// Last Ask timing, for diagnosis: ~/Library/Application Support/com.meetnino.notch/ask-last.json
+    private static func recordAsk(text: String, route: QuickAnswer.Route, started: Date, firstWords: Date?) {
+        let kind: String
+        switch route { case .local: kind = "local (no model)"; case .fast: kind = "Haiku, streamed"; case .agent: kind = "full Nino agent" }
+        let record: [String: Any] = [
+            "text": text, "route": kind,
+            "firstWordsSeconds": firstWords.map { ($0.timeIntervalSince(started) * 100).rounded() / 100 } ?? NSNull(),
+            "totalSeconds": (Date().timeIntervalSince(started) * 100).rounded() / 100,
+        ]
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("com.meetnino.notch")
+        if let data = try? JSONSerialization.data(withJSONObject: record, options: [.prettyPrinted]) {
+            try? data.write(to: dir.appendingPathComponent("ask-last.json"))
+        }
+    }
+
+    /// A question for the full agent. Marked so the ask box that this opens
+    /// does not start the microphone.
     func sendTypedAsk(_ text: String) {
         if state?.ask.visible != true { suppressAutoListen = true }
         send("askSend", text: text)
+    }
+
+    /// Make sure the Ask box is showing (for answers made here) without starting the mic.
+    private func openAskBoxQuietly() {
+        guard state?.ask.visible != true else { return }
+        suppressAutoListen = true
+        send("askOpen")
     }
 
     /// Close the ask box. If it is still listening, cancel the recording too, so
     /// the words are not pasted into whatever app is underneath.
     func closeAsk() {
         listen.stop()
+        autoCloseTask?.cancel()
         send(state?.isCapturing == true ? "cancel" : "askClose")
     }
 
     /// Close the ask box and leave Screen Control selected, showing what happened.
+    /// Keep the notch open on the result ("Done: playing Liked Songs"), then close
+    /// it on its own a few seconds later unless something else happened meanwhile.
     func showScreenResult() {
-        NinoModuleRegistry.shared.select("nino.screen")
-        closeAsk()
+        let line = NinoScreenControl.shared.lastResult
+        stage = .done(line.isEmpty ? "Done" : line)
+        autoCloseTask?.cancel()
+        autoCloseTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(4))
+            guard let self, !Task.isCancelled, case .done = self.stage else { return }
+            self.closeAsk()
+        }
     }
 
     // MARK: One-press Right ⌘ (Ask Nino listens right away)
@@ -309,34 +396,57 @@ final class NinoVoiceLink: ObservableObject {
         guard !suppressAutoListen, let s = state, s.recording == "idle", s.ask.messages.isEmpty else { return }
         send("toggleRecord")
         listen.start()
+        stage = .listening
     }
 
     private func stopListening() {
         guard listen.active else { return }
         listen.stop()
+        stage = .thinking
         if state?.recording == "recording" { send("toggleRecord") }
     }
 
     /// A second Right ⌘ press while Ask Nino is listening stops it. The engine
     /// ignores Right ⌘ while it records, so the two never fight over the key.
+    private var rightCommandDownWhileListening = false
+
+    /// The second Right ⌘ press stops and sends. It acts on RELEASE plus a short
+    /// beat: Nino Voice handles Right ⌘ on release too, and it must still see
+    /// "recording" at that moment, or it treats the press as "close the box"
+    /// (that was the notch closing on the second press).
     private func watchRightCommand() {
         guard rightCommandMonitor == nil else { return }
         rightCommandMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { event in
-            guard event.keyCode == 54, event.modifierFlags.contains(.command) else { return }  // Right ⌘ down
-            Task { @MainActor in NinoVoiceLink.shared.stopListening() }
+            guard event.keyCode == 54 else { return }  // Right ⌘
+            let down = event.modifierFlags.contains(.command)
+            Task { @MainActor in NinoVoiceLink.shared.rightCommand(down: down) }
+        }
+    }
+
+    private func rightCommand(down: Bool) {
+        if down {
+            rightCommandDownWhileListening = listen.active
+            return
+        }
+        guard rightCommandDownWhileListening else { return }
+        rightCommandDownWhileListening = false
+        Task { @MainActor [weak self] in
+            // 0.4 s: long enough for the last spoken words to reach the recording.
+            try? await Task.sleep(for: .milliseconds(400))
+            self?.stopListening()
         }
     }
 
     // MARK: Notch focus (Ask Nino owns the keyboard, dictation never does)
 
     /// Right-Command (or typing into the tab) opened Ask Nino: show it in the notch and take the keyboard.
-    private func showAsk() {
+    private func showAsk(listen startMic: Bool = true) {
         NinoModuleRegistry.shared.select("nino.search")
         BoringViewCoordinator.shared.currentView = .modules
         Self.holdsNotchOpen = true
         BoringNotchSkyLightWindow.ninoAllowsKeyFocus = true
         watchRightCommand()
-        startListeningIfHotkey()
+        if startMic { startListeningIfHotkey() } else { suppressAutoListen = false }
         guard let target = Self.notchTarget() else { return }
         target.vm.open()
         target.window?.makeKey()
@@ -344,6 +454,9 @@ final class NinoVoiceLink: ObservableObject {
 
     private func hideAsk() {
         listen.stop()
+        autoCloseTask?.cancel()
+        stage = .none
+        localMessages = []
         guard Self.holdsNotchOpen else { return }
         Self.holdsNotchOpen = false
         releaseKeyFocus()

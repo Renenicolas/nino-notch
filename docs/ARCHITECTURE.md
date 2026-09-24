@@ -48,9 +48,14 @@ voice engine and runs headless: no dock icon, no menu bar icon, no notch popup.
   keyboard back.
 - Right ⌘ is one-press voice: the engine opens Ask Nino (as before) and Nino
   Notch immediately sends `toggleRecord` to listen. A second Right ⌘ is caught
-  by Nino Notch (global key monitor, needs its Accessibility grant) and sends
-  `toggleRecord` again to stop; the engine ignores Right ⌘ while recording, so
-  they never fight. Spoken words route on their own: commands to Screen
+  by Nino Notch (global key monitor, needs its Accessibility grant) on RELEASE,
+  and 0.4 s later it sends `toggleRecord` to stop. Nino Voice also acts on
+  release and ignores Right ⌘ while recording, so it never reads that press as
+  "close". A third press (or Esc) closes the box.
+- Speed: everyday computer commands match plain rules (no model). Unusual ones
+  go to `claude -p --model haiku` started without hooks/plugins/MCP. Time in a
+  city is computed locally; short questions stream from Haiku; real tasks go to
+  the full Nino agent. Every model call is a one-off process; nothing stays up. Spoken words route on their own: commands to Screen
   Control, everything else to Ask Nino. No Nino Voice change was needed.
 
 ## Settings and first launch

@@ -36,6 +36,8 @@ final class NinoScreenControl: ObservableObject {
 
     @Published private(set) var entries: [Entry] = []
     @Published private(set) var busy = false
+    /// One line for the notch: "Done: Spotify: playing Liked Songs".
+    @Published private(set) var lastResult = ""
     private static var askedForAccessibility = false
 
     var hasAccessibility: Bool { AXIsProcessTrusted() }
@@ -53,6 +55,7 @@ final class NinoScreenControl: ObservableObject {
     func handle(_ text: String) async -> Bool {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, !busy else { return false }
+        let started = Date()
         busy = true
         defer { busy = false }
 
@@ -85,17 +88,19 @@ final class NinoScreenControl: ObservableObject {
             entries[i].ok = allOK
         }
         NSLog("NINO screen: %@ -> %@ [%@] %@", text, decision.steps.map(\.action).joined(separator: ","), decision.by, notes.joined(separator: " | "))
-        Self.recordLast(text: text, decision: decision, notes: notes, ok: allOK)
+        lastResult = (allOK ? "Done: " : "Couldn't: ") + (notes.last ?? "")
+        Self.recordLast(text: text, decision: decision, notes: notes, ok: allOK, seconds: Date().timeIntervalSince(started))
         return true
     }
 
     /// Last result, for diagnosis: ~/Library/Application Support/com.meetnino.notch/screen-control-last.json
-    private static func recordLast(text: String, decision: Decision, notes: [String], ok: Bool) {
+    private static func recordLast(text: String, decision: Decision, notes: [String], ok: Bool, seconds: Double) {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("com.meetnino.notch", isDirectory: true)
         let record: [String: Any] = [
             "at": ISO8601DateFormatter().string(from: Date()), "text": text, "decidedBy": decision.by,
             "steps": decision.steps.map(\.action), "results": notes, "ok": ok,
+            "seconds": (seconds * 100).rounded() / 100,
         ]
         if let data = try? JSONSerialization.data(withJSONObject: record, options: [.prettyPrinted]) {
             try? data.write(to: dir.appendingPathComponent("screen-control-last.json"))
@@ -118,6 +123,10 @@ final class NinoScreenControl: ObservableObject {
     }
 
     nonisolated static func decide(_ text: String) async -> Decision? {
+        // Common commands never touch a model: plain rules, instant.
+        if let steps = QuickCommand.parse(text) {
+            return Decision(steps: steps, by: "instant")
+        }
         if let key = await TypeSafeJev.apiKey() {
             switch await TypeSafeJev.classify(text, apiKey: key) {
             case .notCommand:
@@ -200,15 +209,15 @@ struct AppTarget {
         let running = { (id: String) in !NSRunningApplication.runningApplications(withBundleIdentifier: id).isEmpty }
         let target = bundleID ?? (running("com.spotify.client") ? "com.spotify.client" : "com.apple.Music")
         let name = target == "com.spotify.client" ? "Spotify" : "Music"
-        let verb: String
+        let verb: String, said: String
         switch action {
-        case .play: verb = "play"
-        case .pause: verb = "pause"
-        case .next_track: verb = "next track"
-        case .previous_track: verb = "previous track"
+        case .play: (verb, said) = ("play", "playing \(name)")
+        case .pause: (verb, said) = ("pause", "paused \(name)")
+        case .next_track: (verb, said) = ("next track", "next song")
+        case .previous_track: (verb, said) = ("previous track", "previous song")
         default: return (false, "not a player action")
         }
-        return AppleScript.run("tell application \"\(name)\" to \(verb)") != nil ? (true, "\(name): \(verb)") : (false, "\(name) didn't respond")
+        return AppleScript.run("tell application \"\(name)\" to \(verb)") != nil ? (true, said) : (false, "\(name) didn't respond")
     }
 }
 
@@ -240,10 +249,10 @@ enum SpotifyControl {
         for uri in uris {
             // The URI goes in as an argument, never spliced into script source.
             guard AppleScript.run("on run argv\ntell application \"Spotify\" to play track (item 1 of argv)\nend run", args: [uri]) != nil else { continue }
-            if await isPlaying() { return (true, "Spotify: playing Liked Songs") }
+            if await isPlaying() { return (true, "playing Liked Songs") }
             // Spotify 1.3 can load the collection paused: press play once.
             AppleScript.run("tell application \"Spotify\" to play")
-            if await isPlaying() { return (true, "Spotify: playing Liked Songs") }
+            if await isPlaying() { return (true, "playing Liked Songs") }
         }
 
         // 2. Accessibility: open Liked Songs and press Spotify's own Play button.
@@ -258,7 +267,7 @@ enum SpotifyControl {
             return (false, "Spotify not running")
         }
         if AXPress.firstButton(inApp: pid, named: ["Play", "Play Liked Songs"]), await isPlaying() {
-            return (true, "Spotify: playing Liked Songs (pressed Play)")
+            return (true, "playing Liked Songs")
         }
         return (false, "couldn't start Liked Songs")
     }
@@ -460,10 +469,14 @@ enum ClaudeCommandParser {
                 let process = Process()
                 process.executableURL = URL(fileURLWithPath: claude)
                 // haiku: a fixed-schema parse, and speed matters; the words go in on stdin.
-                // No tools and an empty working folder: a parse must never read files,
-                // and anything it touched would raise permission prompts for Nino Notch.
+                // Haiku (fastest on the subscription). No tools, no user settings (hooks,
+                // plugins), no MCP servers, no skills, no saved session, empty folder:
+                // a parse must never read files, and it starts ~2 s faster this way.
+                // (--bare would be faster still but needs a paid API key.)
                 process.arguments = ["-p", "--model", "haiku", "--output-format", "text",
-                                     "--disallowedTools", "Bash,Read,Edit,Write,Glob,Grep,WebFetch,WebSearch,Task,NotebookEdit"]
+                                     "--setting-sources", "", "--strict-mcp-config", "--tools", "",
+                                     "--disable-slash-commands", "--no-session-persistence",
+                                     "--system-prompt", instructions]
                 let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("nino-screen-claude", isDirectory: true)
                 try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
                 process.currentDirectoryURL = scratch
@@ -475,7 +488,7 @@ enum ClaudeCommandParser {
                 process.standardOutput = output
                 process.standardError = Pipe()
                 guard (try? process.run()) != nil else { continuation.resume(returning: nil); return }
-                input.fileHandleForWriting.write(Data((instructions + " " + text).utf8))
+                input.fileHandleForWriting.write(Data(text.utf8))
                 try? input.fileHandleForWriting.close()
                 let data = output.fileHandleForReading.readDataToEndOfFile()
                 process.waitUntilExit()
@@ -494,3 +507,87 @@ enum ClaudeCommandParser {
         return reply.steps.filter { NinoScreenControl.Action(rawValue: $0.action) != nil }
     }
 }
+
+// MARK: - Instant rules (no AI)
+
+/// The everyday commands, matched by plain rules so they run instantly with no
+/// model call. Every clause ("open Spotify", "and play my Liked Songs") must
+/// match, or the whole sentence goes to the AI path instead.
+enum QuickCommand {
+    static func parse(_ text: String) -> [NinoScreenControl.Step]? {
+        var t = text.lowercased()
+        t = t.replacingOccurrences(of: #"[^a-z0-9 .'+-]"#, with: " ", options: .regularExpression)
+        for filler in [#"^(hey |ok |okay )?nino,? "#, #"\b(please|for me|can you|could you|would you|will you)\b"#] {
+            t = t.replacingOccurrences(of: filler, with: " ", options: .regularExpression)
+        }
+        t = t.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression).trimmingCharacters(in: .whitespaces)
+        t = t.trimmingCharacters(in: CharacterSet(charactersIn: ". "))
+        guard !t.isEmpty else { return nil }
+
+        let clauses = t.replacingOccurrences(of: #",? and then |,? and |,? then |, "#, with: "|", options: .regularExpression)
+            .split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        var steps: [NinoScreenControl.Step] = []
+        for clause in clauses {
+            guard let step = one(clause) else { return nil }
+            steps.append(step)
+        }
+        // "open Spotify and play my Liked Songs": Liked Songs opens Spotify itself.
+        if steps.contains(where: { $0.action == "play_liked_songs" }) {
+            steps.removeAll { $0.action == "open_app" && $0.app?.lowercased() == "spotify" }
+        }
+        return steps.isEmpty ? nil : steps
+    }
+
+    private static func matches(_ s: String, _ pattern: String) -> Bool {
+        s.range(of: "^(" + pattern + ")$", options: .regularExpression) != nil
+    }
+
+    static func one(_ c: String) -> NinoScreenControl.Step? {
+        // "the/my/this" only counts with a noun after it: a half-heard "play my" is not "play".
+        let music = #"( (the |my |this |that )?(music|song|track|tune|spotify|playback|it))?( on spotify| in spotify)?"#
+        if matches(c, #"(play|put on|start|shuffle)?( my)? (liked|saved|favou?rite|favou?rited|like)( songs| tracks| music| playlist)?( on spotify| in spotify)?"#) {
+            return .init(action: "play_liked_songs", app: "spotify")
+        }
+        if matches(c, "(play|resume|unpause|continue)" + music) { return .init(action: "play", app: app(in: c)) }
+        if matches(c, "(pause|stop)" + music) { return .init(action: "pause", app: app(in: c)) }
+        if matches(c, #"(next|skip)( this| the)?( song| track| one)?|(play |go to )?(the )?next( song| track| one)?|skip it"#) {
+            return .init(action: "next_track", app: app(in: c))
+        }
+        if matches(c, #"(previous|last|go back|back)( song| track| one)?|(play |go to )?(the )?previous( song| track| one)?|play (that|the last) (song|track) again"#) {
+            return .init(action: "previous_track", app: app(in: c))
+        }
+        if matches(c, #"(turn|crank) (it|the (volume|music|sound)) up|turn up( the)?( volume| music| sound)?|volume up|louder|(make it |a bit |little )?louder|raise( the)? volume"#) {
+            return .init(action: "volume_up")
+        }
+        if matches(c, #"(turn) (it|the (volume|music|sound)) down|turn down( the)?( volume| music| sound)?|volume down|(make it |a bit |little )?(quieter|softer)|lower( the)? volume"#) {
+            return .init(action: "volume_down")
+        }
+        if matches(c, #"(mute|unmute)( the)?( sound| audio| mac| computer| music| volume)?"#) { return .init(action: "mute") }
+        if let r = c.range(of: #"^(open|launch|start|switch to|bring up|pull up)( the)? (.+?)( app)?$"#, options: .regularExpression) {
+            var name = String(c[r]).replacingOccurrences(of: #"^(open|launch|start|switch to|bring up|pull up)( the)? "#, with: "", options: .regularExpression)
+            name = name.replacingOccurrences(of: #" app$"#, with: "", options: .regularExpression)
+            if let installed = installedApp(named: name) { return .init(action: "open_app", app: installed) }
+        }
+        return nil
+    }
+
+    private static func app(in c: String) -> String? {
+        c.contains("spotify") ? "spotify" : (c.contains("apple music") || c.contains(" music app") ? "music" : nil)
+    }
+
+    /// The real app name for "slack" -> "Slack", only if it is installed.
+    static func installedApp(named raw: String) -> String? {
+        let name = raw.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty, name.count < 40 else { return nil }
+        if AppTarget.known[name] != nil { return name }
+        for dir in ["/Applications", "/System/Applications", "/System/Applications/Utilities", "\(NSHomeDirectory())/Applications"] {
+            guard let items = try? FileManager.default.contentsOfDirectory(atPath: dir) else { continue }
+            if let hit = items.first(where: { $0.lowercased() == name + ".app" }) {
+                return String(hit.dropLast(4))
+            }
+        }
+        return nil
+    }
+}
+
+

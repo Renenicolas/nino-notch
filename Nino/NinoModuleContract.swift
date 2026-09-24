@@ -90,6 +90,36 @@ enum NinoModuleContract {
         registry.register(Extra())
         expect(registry.modules.count == expectedIDs.count + 1, "duplicate id is ignored")
 
+        // Instant rules: everyday commands never touch a model.
+        func acts(_ t: String) -> [String]? { QuickCommand.parse(t)?.map(\.action) }
+        expect(acts("pause the music") == ["pause"], "instant: pause the music")
+        expect(acts("Play") == ["play"], "instant: play")
+        expect(acts("skip this song") == ["next_track"], "instant: skip this song")
+        expect(acts("next track please") == ["next_track"], "instant: next track please")
+        expect(acts("go back") == ["previous_track"], "instant: go back")
+        expect(acts("turn it up") == ["volume_up"], "instant: turn it up")
+        expect(acts("make it quieter") == ["volume_down"], "instant: make it quieter")
+        expect(acts("mute") == ["mute"], "instant: mute")
+        expect(acts("open Safari") == ["open_app"], "instant: open Safari")
+        expect(acts("Open Spotify and play my Liked Songs.") == ["play_liked_songs"], "instant: open Spotify and play my Liked Songs")
+        expect(acts("Hey Nino, play my liked songs") == ["play_liked_songs"], "instant: hey Nino, play my liked songs")
+        expect(acts("open Notes and turn it down") == ["open_app", "volume_down"], "instant: two clauses")
+        expect(acts("open Safari and go to espn.com") == nil, "instant: unusual command goes to the AI")
+        expect(acts("what should I play tonight?") == nil, "instant: a question is not a command")
+        expect(acts("open the pod bay doors") == nil, "instant: unknown app is not guessed")
+        expect(acts("Open Spotify and play my") == nil, "instant: a half-heard command is not guessed")
+        expect(acts("play the music") == ["play"] && acts("pause my music") == ["pause"], "instant: the/my with a noun still counts")
+
+        // Quick answers: time here, short questions to Haiku, tasks to the full agent.
+        var cal = Calendar(identifier: .gregorian); cal.timeZone = TimeZone(identifier: "UTC")!
+        let noonUTC = cal.date(from: DateComponents(year: 2026, month: 1, day: 15, hour: 12, minute: 0))!
+        expect(QuickAnswer.route("what time is it in Beirut", now: noonUTC) == .local("It's 2:00 PM in Beirut (Thursday)."), "quick: Beirut time computed locally")
+        expect(QuickAnswer.route("What's the time in Tokyo?", now: noonUTC) == .local("It's 9:00 PM in Tokyo (Thursday)."), "quick: Tokyo time")
+        expect(QuickAnswer.route("what's the weather in Beirut?") == .fast, "quick: weather goes to Haiku")
+        expect(QuickAnswer.route("who wrote Dune?") == .fast, "quick: a fact goes to Haiku")
+        expect(QuickAnswer.route("email Marco the Kinnect deck") == .agent, "quick: a task goes to the full agent")
+        expect(QuickAnswer.route("what's on my calendar tomorrow?") == .agent, "quick: my calendar needs the full agent")
+
         // One-press Right ⌘: only the second press (or the 2-minute cap) stops it.
         var stops = 0
         let t0 = Date()

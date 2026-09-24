@@ -92,10 +92,6 @@ struct ScreenControlPanel: View {
     private func run() {
         let text = command
         command = ""
-        Task {
-            if !(await screen.handle(text)) {
-                link.sendTypedAsk(text)  // not a screen command: Ask Nino answers it
-            }
-        }
+        link.routeAsk(text)  // same order as the Ask box: commands here, questions to Ask Nino
     }
 }

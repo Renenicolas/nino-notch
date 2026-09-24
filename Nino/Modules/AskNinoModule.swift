@@ -24,16 +24,17 @@ struct AskNinoPanel: View {
 
     var body: some View {
         NinoCard {
-            if let messages = ask?.messages, !messages.isEmpty {
-                messageList(messages)
-            } else {
+            stageRow
+            if !allMessages.isEmpty {
+                messageList(allMessages)
+            } else if link.stage == .none && link.state?.recording != "recording" {
                 Text(hint)
                     .font(.caption)
                     .foregroundStyle(NinoTheme.dim)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
 
-            if let status = ask?.status, !(status == "Done" && ask?.messages.isEmpty == false) {
+            if let status = ask?.status, status != "Thinking", status != "Sending", !(status == "Done" && ask?.messages.isEmpty == false) {
                 Text(status)
                     .font(.caption2)
                     .foregroundStyle(ask?.failed != nil ? NinoTheme.gold : NinoTheme.sub)
@@ -88,11 +89,49 @@ struct AskNinoPanel: View {
             if !NinoVoiceLink.holdsNotchOpen { link.releaseKeyFocus() }
         }
         .onChange(of: ask?.draft ?? "") { _, spoken in
-            // Spoken words arrive here, then go out on their own (Screen Control or Ask Nino).
-            draft = spoken
+            // Spoken words go out on their own (Screen Control or Ask Nino); only show
+            // them in the field while nothing has been sent yet.
+            if link.stage == .none || link.stage == .listening { draft = spoken }
+        }
+        .onChange(of: link.stage) { _, stage in
+            // Once spoken words are on their way, the box is not a place to send them again.
+            if stage == .thinking { draft = "" }
+            if case .done = stage { draft = "" }
         }
         .onChange(of: ask?.visible ?? false) { _, visible in
             if visible { DispatchQueue.main.async { fieldFocused = true } }
+        }
+    }
+
+    /// Answers made in Nino Notch first, then the full agent's conversation.
+    private var allMessages: [NinoVoiceState.Message] {
+        link.localMessages + (ask?.messages ?? [])
+    }
+
+    @ViewBuilder
+    private var stageRow: some View {
+        if link.stage == .listening || link.state?.recording == "recording" {
+            HStack(alignment: .top, spacing: 8) {
+                Circle().fill(NinoTheme.gold).frame(width: 8, height: 8).padding(.top, 4)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Listening…").font(.subheadline.weight(.semibold)).foregroundStyle(NinoTheme.gold)
+                    Text((link.state?.partial ?? "").isEmpty ? "Say it, then press Right ⌘." : (link.state?.partial ?? ""))
+                        .font(.callout).foregroundStyle(NinoTheme.text).lineLimit(2).truncationMode(.head)
+                }
+                Spacer(minLength: 0)
+                NinoVoiceMeter(level: link.level, bars: 10, height: 14)
+            }
+        } else if link.stage == .thinking || ask?.busy == true {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small).tint(NinoTheme.gold)
+                Text("Thinking…").font(.subheadline.weight(.semibold)).foregroundStyle(NinoTheme.sub)
+            }
+        } else if case .done(let line) = link.stage {
+            HStack(spacing: 8) {
+                Image(systemName: line.hasPrefix("Couldn't") ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
+                    .foregroundStyle(NinoTheme.gold)
+                Text(line).font(.subheadline.weight(.semibold)).foregroundStyle(NinoTheme.text).lineLimit(2)
+            }
         }
     }
 
@@ -120,14 +159,7 @@ struct AskNinoPanel: View {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSend else { return }
         draft = ""
-        Task {
-            // A screen command ("open Spotify…") is done right here; anything else goes to Nino.
-            if await NinoScreenControl.shared.handle(text) {
-                link.showScreenResult()
-            } else {
-                link.sendTypedAsk(text)
-            }
-        }
+        link.routeAsk(text)
     }
 
     private func messageList(_ messages: [NinoVoiceState.Message]) -> some View {

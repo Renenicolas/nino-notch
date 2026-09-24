@@ -35,10 +35,16 @@ enum NinoScreenCommandFlag {
     @MainActor
     static func applyIfRequested() {
         let args = CommandLine.arguments
-        guard let i = args.firstIndex(of: "--nino-screen-command"), i + 1 < args.count else { return }
-        let text = args[i + 1]
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            Task { await NinoScreenControl.shared.handle(text) }
+        if let i = args.firstIndex(of: "--nino-screen-command"), i + 1 < args.count {
+            let text = args[i + 1]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                Task { await NinoScreenControl.shared.handle(text) }
+            }
+        }
+        // `--nino-ask "<text>"`: the full Ask routing, exactly as if typed into the Ask box.
+        if let i = args.firstIndex(of: "--nino-ask"), i + 1 < args.count {
+            let text = args[i + 1]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { NinoVoiceLink.shared.routeAsk(text) }
         }
     }
 }

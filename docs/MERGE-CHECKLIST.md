@@ -118,3 +118,26 @@ keychain-blocked polish runs). Delete them in History if you like.
 | R1 | One-press Right ⌘: press opens Ask Nino and listens; press again stops and sends; 2-minute cap only | `NinoVoiceLink.startListeningIfHotkey`, `watchRightCommand`, `AskListenSession` | PARTIAL — the engine's Right ⌘ call (`askOpen`) made Nino Notch start listening at once and keep listening through silence; the stop it sends on the second press works. The physical key presses could not be made from this terminal (no permission to post key events) |
 | A1 | Ask Nino answers in the notch | engine → OpenClaw → Ask Nino tab | LIVE — "It's about 11:23 PM in Beirut right now." (12 s) |
 | A2 | OpenClaw Slack permission file on reno-mac | `~/.openclaw/nino-permissions.json` (restored byte-for-byte from reno-mini, 0600) | LIVE — never existed on reno-mac (machine-local, missed in the move); its absence only printed a warning that Ask Nino's error display showed in place of the real error |
+
+## E. Added 2026-09-24 (evening): clear Right ⌘, instant commands, fast answers
+
+| # | Capability | Where it lives | Verified |
+|---|---|---|---|
+| R2 | Right ⌘ stages: press 1 → "Listening…" + live words; press 2 → stops, sends, stays open on "Thinking…", then "Done: …" or the answer; press 3 or Esc closes; auto-close 4 s after a computer command | `NinoVoiceLink` (stage, second press acts on key RELEASE + 0.4 s), `AskNinoPanel.stageRow` | LIVE — voice "Pause the music": Listening with live words → "Done" → closed on its own 4.4 s later (screenshots `docs/screenshots/ask-*.png`). Root cause of the old close: Nino Voice fires Ask on key release; if the recording had already finished it read the press as "close" |
+| F1 | Instant computer commands, no AI: play, pause, next/skip, previous/back, volume up/down ("turn it up"), mute, open [installed app], play my Liked Songs, and "and"-combinations | `QuickCommand` in `Nino/NinoScreenControl.swift` | LIVE — see timings; 17 phrasing checks in the contract, incl. "a half-heard 'play my' is not guessed" |
+| F2 | Unusual commands → Claude CLI on Haiku (was Haiku before too), now started without hooks/plugins/MCP/skills/tools/session | `ClaudeCommandParser` | LIVE — "bump the volume up a little" |
+| Q1 | Time in a city answered on the Mac (time-zone database) | `QuickAnswer.timeAnswer` | LIVE — Beirut |
+| Q2 | Short questions → Haiku, streamed (first words appear as they arrive), web search allowed; real tasks → full Nino agent | `QuickAnswer.route`, `streamFast` | LIVE — "who wrote the novel Dune?" |
+| Q3 | Nothing new runs in the background | every model call is a one-off process | CODE + measured: only Nino Notch and Nino Voice stay running |
+| P1 | Old Nino Voice signing password (reno-mini search, Aug 27 command) | — | NOT FOUND — reno-mini has no Aug 27 creation command; only Sep 2 lines (for reno-mini's own keychain), not used |
+
+**Timings (measured through the installed app, 2026-09-24):**
+
+| Request | Before | After | Path after |
+|---|---|---|---|
+| "pause the music" | 8.6–10.5 s (Claude/Haiku parse) | **0.11–0.21 s** | instant rules |
+| "open Spotify and play my Liked Songs" | 7.5–9.4 s parse, then ~2.5 s Spotify | **2.56 s** (all Spotify) | instant rules |
+| "bump the volume up a little" (unusual) | 7.5–8.1 s | **6.98 s** | Haiku, lean start |
+| "what time is it in Beirut" | 12 s best, 37–70 s typical, 180 s+ worst | **0.04 s** | on the Mac |
+| "who wrote the novel Dune?" | full agent (12–70 s) | **first words 2.5 s, done 3.3 s** | Haiku, streamed |
+
