@@ -108,6 +108,11 @@ enum NinoModuleContract {
         expect(SpotifyLookup.uri(from: "Here: https://open.spotify.com/track/0VjIjW4GlUZAMYd2vXMi3b?si=x") == "spotify:track:0VjIjW4GlUZAMYd2vXMi3b", "lookup: Spotify track link becomes a URI")
         expect(SpotifyLookup.uri(from: "https://open.spotify.com/intl-de/artist/1Xyo4u8uXC1ZmMpatF05PJ") == "spotify:artist:1Xyo4u8uXC1ZmMpatF05PJ", "lookup: artist link, localized")
         expect(SpotifyLookup.uri(from: "no link here") == nil, "lookup: no link, no guess")
+        let drake: [String: Any] = ["artists": ["items": [["name": "Drake", "uri": "spotify:artist:3TVXtAsR1Inumwj472S9r4"]]],
+                                    "tracks": ["items": [["name": "God's Plan", "uri": "spotify:track:6DCZcSspjsKoFjzjrWoCdn"]]]]
+        expect(SpotifyWebSearch.pick(drake, query: "drake") == "spotify:artist:3TVXtAsR1Inumwj472S9r4", "search: an artist name plays the artist")
+        expect(SpotifyWebSearch.pick(drake, query: "gods plan drake") == "spotify:track:6DCZcSspjsKoFjzjrWoCdn", "search: a song plays the song")
+        expect(QuickCommand.parse("play the album Rumours")?.first?.query == "album rumours", "instant: album hint kept for search")
         expect(acts("Open Spotify and play my Liked Songs.") == ["play_liked_songs"], "instant: open Spotify and play my Liked Songs")
         expect(acts("Hey Nino, play my liked songs") == ["play_liked_songs"], "instant: hey Nino, play my liked songs")
         expect(acts("open Notes and turn it down") == ["open_app", "volume_down"], "instant: two clauses")

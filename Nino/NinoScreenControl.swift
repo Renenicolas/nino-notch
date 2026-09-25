@@ -291,12 +291,24 @@ enum SpotifyControl {
     /// is found first (web search on Haiku, the subscription), then played.
     static func play(search query: String) async -> (Bool, String) {
         guard await ensureRunning() else { return (false, "Spotify didn't start") }
-        guard let uri = await SpotifyLookup.find(query) else { return (false, "couldn't find \(query) on Spotify") }
-        guard AppleScript.run("on run argv\ntell application \"Spotify\" to play track (item 1 of argv)\nend run", args: [uri]) != nil else {
-            return (false, "Spotify didn't respond")
+        // Spotify's own search (~0.5 s) when keys are set up; the web lookup (~15 s) otherwise.
+        var found = await SpotifyWebSearch.find(query)
+        if found == nil { found = await SpotifyLookup.find(query) }
+        guard let uri = found else { return (false, "couldn't find \(query) on Spotify") }
+        // Spotify won't keep playing a bare artist link (it starts, then stops ~1 s in),
+        // so an artist plays its top song inside the artist's context instead.
+        let played: String?
+        if uri.hasPrefix("spotify:artist:"), let top = await SpotifyWebSearch.topTrack(ofArtist: uri) {
+            played = AppleScript.run("on run argv\ntell application \"Spotify\" to play track (item 1 of argv) in context (item 2 of argv)\nend run", args: [top, uri])
+        } else {
+            played = AppleScript.run("on run argv\ntell application \"Spotify\" to play track (item 1 of argv)\nend run", args: [uri])
         }
+        guard played != nil else { return (false, "Spotify didn't respond") }
         if !(await isPlaying()) { AppleScript.run("tell application \"Spotify\" to play") }
         guard await isPlaying() else { return (false, "found it, but it didn't start") }
+        // It must still be playing a moment later (catches start-then-stop).
+        try? await Task.sleep(for: .milliseconds(1500))
+        guard await isPlaying() else { return (false, "it started, then Spotify stopped it") }
         let name = AppleScript.run("tell application \"Spotify\" to get name of current track") ?? query
         let artist = AppleScript.run("tell application \"Spotify\" to get artist of current track") ?? ""
         return (true, "playing \(name)" + (artist.isEmpty ? "" : " by \(artist)"))
@@ -606,7 +618,8 @@ enum QuickCommand {
         // "play Blinding Lights by The Weeknd", "put on Drake", "play the album Rumours on Spotify"
         if let r = c.range(of: #"^(play|put on|queue up|listen to)( the song| the track| the album| the playlist| some| me)? (.+?)( on spotify| in spotify)?$"#, options: .regularExpression) {
             var query = String(c[r])
-            query = query.replacingOccurrences(of: #"^(play|put on|queue up|listen to)( the song| the track| the album| the playlist| some| me)? "#, with: "", options: .regularExpression)
+            query = query.replacingOccurrences(of: #"^(play|put on|queue up|listen to)( the song| the track| some| me)? "#, with: "", options: .regularExpression)
+            query = query.replacingOccurrences(of: #"^the (album|playlist) "#, with: "$1 ", options: .regularExpression)  // keep it as a search hint
             query = query.replacingOccurrences(of: #" (on|in) spotify$"#, with: "", options: .regularExpression)
             let vague: Set<String> = ["music", "something", "anything", "a song", "songs", "it", "my", "the", "my music", "some music", "something good"]
             if query.count >= 2, !vague.contains(query) { return .init(action: "play_song", app: "spotify", query: query) }
@@ -677,6 +690,98 @@ enum SpotifyLookup {
               let m = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               let kind = Range(m.range(at: 1), in: text), let id = Range(m.range(at: 2), in: text) else { return nil }
         return "spotify:\(text[kind]):\(text[id])"
+    }
+}
+
+// MARK: - Spotify search (Web API, client credentials)
+
+/// Spotify's own search, ~0.5 s. Uses the free "Nino Notch" developer app whose
+/// Client ID / Secret live ONLY in the login keychain (service
+/// com.meetnino.notch.spotify, accounts client-id / client-secret), read through
+/// /usr/bin/security. The access token (1 hour) is kept in memory, never saved.
+/// Search needs no Spotify login; playback still goes through the desktop app.
+enum SpotifyWebSearch {
+    private actor TokenCache {
+        var token: String?
+        var expires = Date.distantPast
+        func valid() -> String? { Date() < expires ? token : nil }
+        func store(_ t: String, seconds: Double) { token = t; expires = Date().addingTimeInterval(seconds - 60) }
+    }
+    private static let cache = TokenCache()
+
+    private static func keychain(_ account: String) -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        process.arguments = ["find-generic-password", "-s", "com.meetnino.notch.spotify", "-a", account, "-w"]
+        let out = Pipe()
+        process.standardOutput = out
+        process.standardError = Pipe()
+        guard (try? process.run()) != nil else { return nil }
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return nil }
+        let value = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return value?.isEmpty == false ? value : nil
+    }
+
+    private static func token() async -> String? {
+        if let t = await cache.valid() { return t }
+        guard let id = keychain("client-id"), let secret = keychain("client-secret") else { return nil }
+        var request = URLRequest(url: URL(string: "https://accounts.spotify.com/api/token")!)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 6
+        request.setValue("Basic " + Data("\(id):\(secret)".utf8).base64EncodedString(), forHTTPHeaderField: "Authorization")
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Data("grant_type=client_credentials".utf8)
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let token = json["access_token"] as? String else { return nil }
+        await cache.store(token, seconds: json["expires_in"] as? Double ?? 3600)
+        return token
+    }
+
+    static func find(_ raw: String) async -> String? {
+        guard let token = await token() else { return nil }
+        var query = raw.lowercased()
+        var types = "track,artist"
+        if query.hasPrefix("album ") { types = "album"; query.removeFirst(6) }
+        else if query.hasPrefix("playlist ") { types = "playlist"; query.removeFirst(9) }
+        query = query.replacingOccurrences(of: " by ", with: " ")
+        var parts = URLComponents(string: "https://api.spotify.com/v1/search")!
+        parts.queryItems = [.init(name: "q", value: query), .init(name: "type", value: types), .init(name: "limit", value: "3")]
+        var request = URLRequest(url: parts.url!)
+        request.timeoutInterval = 6
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return pick(json, query: query)
+    }
+
+    /// The artist's most popular song, to start an artist request with.
+    static func topTrack(ofArtist artistURI: String) async -> String? {
+        guard let token = await token(), let id = artistURI.split(separator: ":").last else { return nil }
+        var request = URLRequest(url: URL(string: "https://api.spotify.com/v1/artists/\(id)/top-tracks?market=US")!)
+        request.timeoutInterval = 6
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        guard let (data, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let first = (json["tracks"] as? [[String: Any]])?.first else { return nil }
+        return first["uri"] as? String
+    }
+
+    /// Pure choice over a search response (checked in NinoModuleContract).
+    static func pick(_ json: [String: Any], query: String) -> String? {
+        func items(_ key: String) -> [[String: Any]] {
+            ((json[key] as? [String: Any])?["items"] as? [Any])?.compactMap { $0 as? [String: Any] } ?? []
+        }
+        // "put on Drake": the name said IS an artist -> play the artist.
+        if let artist = items("artists").first, (artist["name"] as? String)?.lowercased() == query.lowercased() {
+            return artist["uri"] as? String
+        }
+        return (items("tracks").first ?? items("albums").first ?? items("playlists").first ?? items("artists").first)?["uri"] as? String
     }
 }
 
