@@ -150,3 +150,10 @@ keychain-blocked polish runs). Delete them in History if you like.
 Result: physical Right ⌘ → speak → Right ⌘ stopped and sent in 2 of 2 rounds with Rene (one question routed to
 the full agent, "What time is it in Beirut?" answered instantly). Temporary logging removed.
 
+## F. Added 2026-09-24 (night): stay on your app, play a specific song
+
+| # | Capability | Where it lives | Verified |
+|---|---|---|---|
+| S1 | "open X" starts the app in the background; "switch to / show / bring up X" brings it forward; if anything else still jumps in front, the app Rene was in is put back | `AppTarget.open(inFront:)`, `NinoScreenControl.handle` | LIVE — "open Calculator": 0.17 s, front app (Aside) unchanged |
+| S2 | "play <song / artist / album / playlist>" on Spotify, in the background | `QuickCommand` → `play_song`, `SpotifyLookup` (Haiku + web search finds the open.spotify.com link), `SpotifyControl.play(search:)` | LIVE — "play Blinding Lights by The Weeknd" → Blinding Lights playing, front app unchanged, 16.9 s (almost all of it the web lookup) |
+

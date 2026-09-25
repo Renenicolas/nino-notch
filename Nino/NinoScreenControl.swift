@@ -21,7 +21,7 @@ final class NinoScreenControl: ObservableObject {
     }
 
     enum Action: String, CaseIterable {
-        case open_app, play_liked_songs, play, pause, next_track, previous_track,
+        case open_app, focus_app, play_liked_songs, play_song, play, pause, next_track, previous_track,
              volume_up, volume_down, mute, open_url
     }
 
@@ -75,6 +75,9 @@ final class NinoScreenControl: ObservableObject {
         entries.insert(entry, at: 0)
         entries = Array(entries.prefix(8))
 
+        // Stay where Rene is working: only "switch to X" may change the front app.
+        let frontBefore = NSWorkspace.shared.frontmostApplication
+        let wantsFront = decision.steps.contains { $0.action == "focus_app" || $0.action == "open_url" }
         var notes: [String] = []
         var allOK = true
         for step in decision.steps {
@@ -88,6 +91,9 @@ final class NinoScreenControl: ObservableObject {
             entries[i].ok = allOK
         }
         NSLog("NINO screen: %@ -> %@ [%@] %@", text, decision.steps.map(\.action).joined(separator: ","), decision.by, notes.joined(separator: " | "))
+        if !wantsFront, let frontBefore, NSWorkspace.shared.frontmostApplication != frontBefore {
+            frontBefore.activate()  // something (an app's own launch) jumped in front: put Rene back
+        }
         lastResult = (allOK ? "Done: " : "Couldn't: ") + (notes.last ?? "")
         Self.recordLast(text: text, decision: decision, notes: notes, ok: allOK, seconds: Date().timeIntervalSince(started))
         return true
@@ -150,7 +156,12 @@ final class NinoScreenControl: ObservableObject {
         let app = AppTarget(step.app)
         switch action {
         case .open_app:
-            return await AppTarget.open(step.app ?? "") ? (true, "opened \(step.app ?? "")") : (false, "couldn't find \(step.app ?? "that app")")
+            return await AppTarget.open(step.app ?? "", inFront: false) ? (true, "opened \(step.app ?? "") in the background") : (false, "couldn't find \(step.app ?? "that app")")
+        case .focus_app:
+            return await AppTarget.open(step.app ?? "", inFront: true) ? (true, "switched to \(step.app ?? "")") : (false, "couldn't find \(step.app ?? "that app")")
+        case .play_song:
+            guard let query = step.query, !query.isEmpty else { return (false, "which song?") }
+            return await SpotifyControl.play(search: query)
         case .open_url:
             // Web links only: a misheard command must not open file:// or app URL schemes.
             guard let s = step.query, let url = URL(string: s.contains("://") ? s : "https://\(s)"),
@@ -187,11 +198,12 @@ struct AppTarget {
         bundleID = name.flatMap { Self.known[$0.lowercased()] }
     }
 
-    /// Open by known name, then by any installed app's name.
-    static func open(_ name: String) async -> Bool {
+    /// Open by known name, then by any installed app's name. `inFront: false`
+    /// launches it without taking the screen away from the app Rene is in.
+    static func open(_ name: String, inFront: Bool = false) async -> Bool {
         let workspace = NSWorkspace.shared
         let config = NSWorkspace.OpenConfiguration()
-        config.activates = true
+        config.activates = inFront
         if let id = known[name.lowercased()], let url = workspace.urlForApplication(withBundleIdentifier: id) {
             return (try? await workspace.openApplication(at: url, configuration: config)) != nil
         }
@@ -261,7 +273,9 @@ enum SpotifyControl {
             _ = AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
             return (false, "needs Accessibility for Nino Notch (prompt shown)")
         }
-        NSWorkspace.shared.open(URL(string: "spotify:collection:tracks")!)
+        let quiet = NSWorkspace.OpenConfiguration()
+        quiet.activates = false
+        _ = try? await NSWorkspace.shared.open(URL(string: "spotify:collection:tracks")!, configuration: quiet)
         try? await Task.sleep(for: .seconds(3))
         guard let pid = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first?.processIdentifier else {
             return (false, "Spotify not running")
@@ -270,6 +284,22 @@ enum SpotifyControl {
             return (true, "playing Liked Songs")
         }
         return (false, "couldn't start Liked Songs")
+    }
+
+    /// Play a song / artist / album / playlist by name, without bringing Spotify forward.
+    /// Spotify's scripting can play any Spotify link but cannot search, so the link
+    /// is found first (web search on Haiku, the subscription), then played.
+    static func play(search query: String) async -> (Bool, String) {
+        guard await ensureRunning() else { return (false, "Spotify didn't start") }
+        guard let uri = await SpotifyLookup.find(query) else { return (false, "couldn't find \(query) on Spotify") }
+        guard AppleScript.run("on run argv\ntell application \"Spotify\" to play track (item 1 of argv)\nend run", args: [uri]) != nil else {
+            return (false, "Spotify didn't respond")
+        }
+        if !(await isPlaying()) { AppleScript.run("tell application \"Spotify\" to play") }
+        guard await isPlaying() else { return (false, "found it, but it didn't start") }
+        let name = AppleScript.run("tell application \"Spotify\" to get name of current track") ?? query
+        let artist = AppleScript.run("tell application \"Spotify\" to get artist of current track") ?? ""
+        return (true, "playing \(name)" + (artist.isEmpty ? "" : " by \(artist)"))
     }
 
     static func ensureRunning() async -> Bool {
@@ -453,10 +483,13 @@ enum ClaudeCommandParser {
     static let instructions = """
     You turn one spoken command for a Mac into JSON. Reply with JSON only, no prose, no code fence.
     Shape: {"is_command": true|false, "steps": [{"action": "...", "app": "...", "query": "..."}]}
-    Allowed actions: open_app, play_liked_songs, play, pause, next_track, previous_track, volume_up, volume_down, mute, open_url.
+    Allowed actions: open_app, focus_app, play_liked_songs, play_song, play, pause, next_track, previous_track, volume_up, volume_down, mute, open_url.
     - is_command is false for questions, chat, or anything that is not a request to do something on the Mac now.
     - "play my liked songs" / "my favorites" / "saved songs" -> play_liked_songs (it opens Spotify itself).
-    - open_app needs "app" (the app's name as installed, e.g. "Spotify", "Safari"). open_url needs "query" = the URL.
+    - open_app needs "app" (the app's name as installed, e.g. "Spotify", "Safari"); it starts the app in the background.
+    - focus_app is for "switch to / show me / bring up X": it brings the app to the front. Needs "app".
+    - play_song needs "query" = what to play on Spotify: a song (with the artist if said), an artist, an album or a playlist, e.g. "Blinding Lights The Weeknd".
+    - open_url needs "query" = the URL.
     - play/pause/next_track/previous_track may set "app" to "spotify" or "music".
     - If it asks for something none of these actions can do, return is_command true and steps [].
     Command:
@@ -563,10 +596,20 @@ enum QuickCommand {
             return .init(action: "volume_down")
         }
         if matches(c, #"(mute|unmute)( the)?( sound| audio| mac| computer| music| volume)?"#) { return .init(action: "mute") }
-        if let r = c.range(of: #"^(open|launch|start|switch to|bring up|pull up)( the)? (.+?)( app)?$"#, options: .regularExpression) {
-            var name = String(c[r]).replacingOccurrences(of: #"^(open|launch|start|switch to|bring up|pull up)( the)? "#, with: "", options: .regularExpression)
+        if let r = c.range(of: #"^(open|launch|start|switch to|bring up|pull up|show me|show|go to)( the)? (.+?)( app)?$"#, options: .regularExpression) {
+            let clause = String(c[r])
+            let front = clause.range(of: #"^(switch to|bring up|pull up|show me|show|go to) "#, options: .regularExpression) != nil
+            var name = clause.replacingOccurrences(of: #"^(open|launch|start|switch to|bring up|pull up|show me|show|go to)( the)? "#, with: "", options: .regularExpression)
             name = name.replacingOccurrences(of: #" app$"#, with: "", options: .regularExpression)
-            if let installed = installedApp(named: name) { return .init(action: "open_app", app: installed) }
+            if let installed = installedApp(named: name) { return .init(action: front ? "focus_app" : "open_app", app: installed) }
+        }
+        // "play Blinding Lights by The Weeknd", "put on Drake", "play the album Rumours on Spotify"
+        if let r = c.range(of: #"^(play|put on|queue up|listen to)( the song| the track| the album| the playlist| some| me)? (.+?)( on spotify| in spotify)?$"#, options: .regularExpression) {
+            var query = String(c[r])
+            query = query.replacingOccurrences(of: #"^(play|put on|queue up|listen to)( the song| the track| the album| the playlist| some| me)? "#, with: "", options: .regularExpression)
+            query = query.replacingOccurrences(of: #" (on|in) spotify$"#, with: "", options: .regularExpression)
+            let vague: Set<String> = ["music", "something", "anything", "a song", "songs", "it", "my", "the", "my music", "some music", "something good"]
+            if query.count >= 2, !vague.contains(query) { return .init(action: "play_song", app: "spotify", query: query) }
         }
         return nil
     }
@@ -590,4 +633,50 @@ enum QuickCommand {
     }
 }
 
+// MARK: - Spotify link lookup
+
+/// Finds the Spotify link for a spoken request ("Blinding Lights by The Weeknd").
+/// Uses Haiku with web search on the existing subscription; no Spotify developer
+/// app needed. Returns a Spotify URI like `spotify:track:0VjIjW4GlUZAMYd2vXMi3b`.
+enum SpotifyLookup {
+    static func find(_ query: String) async -> String? {
+        guard let claude = ClaudeCommandParser.candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else { return nil }
+        let prompt = "Find the Spotify link for this request: \"\(query)\". Prefer the original studio track (or the artist / album / playlist if that is what was asked). Reply with ONLY one open.spotify.com URL."
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: claude)
+                process.arguments = ["-p", "--model", "haiku", "--output-format", "text",
+                                     "--setting-sources", "", "--strict-mcp-config",
+                                     "--tools", "WebSearch", "--allowedTools", "WebSearch",
+                                     "--disable-slash-commands", "--no-session-persistence"]
+                var env = ProcessInfo.processInfo.environment
+                env["PATH"] = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:" + (env["PATH"] ?? "")
+                process.environment = env
+                let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("nino-spotify-lookup", isDirectory: true)
+                try? FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
+                process.currentDirectoryURL = scratch
+                let input = Pipe(), output = Pipe()
+                process.standardInput = input
+                process.standardOutput = output
+                process.standardError = Pipe()
+                guard (try? process.run()) != nil else { continuation.resume(returning: nil); return }
+                input.fileHandleForWriting.write(Data(prompt.utf8))
+                try? input.fileHandleForWriting.close()
+                let data = output.fileHandleForReading.readDataToEndOfFile()
+                process.waitUntilExit()
+                continuation.resume(returning: uri(from: String(data: data, encoding: .utf8) ?? ""))
+            }
+        }
+    }
+
+    /// First Spotify track/album/playlist/artist link in `text`, as a `spotify:` URI.
+    static func uri(from text: String) -> String? {
+        let pattern = #"(?:open\.spotify\.com/(?:intl-[a-z]{2}/)?|spotify:)(track|album|playlist|artist)[/:]([A-Za-z0-9]{22})"#
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let m = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let kind = Range(m.range(at: 1), in: text), let id = Range(m.range(at: 2), in: text) else { return nil }
+        return "spotify:\(text[kind]):\(text[id])"
+    }
+}
 
