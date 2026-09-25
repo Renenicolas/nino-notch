@@ -102,6 +102,8 @@ enum NinoModuleContract {
         expect(acts("mute") == ["mute"], "instant: mute")
         expect(acts("open Safari") == ["open_app"], "instant: open Safari (in the background)")
         expect(acts("switch to Safari") == ["focus_app"], "instant: switch to Safari (brings it forward)")
+        expect(!NinoScreenControl.asksForFocus("open Slack") && !NinoScreenControl.asksForFocus("play Blinding Lights") && !NinoScreenControl.asksForFocus("open espn.com"), "focus: no 'take me there' words, nothing comes forward")
+        expect(NinoScreenControl.asksForFocus("switch to Slack") && NinoScreenControl.asksForFocus("show me espn.com") && NinoScreenControl.asksForFocus("take me to Spotify") && NinoScreenControl.asksForFocus("bring up Safari"), "focus: only Rene's words bring something forward")
         expect(QuickCommand.parse("play Blinding Lights by The Weeknd")?.first?.query == "blinding lights by the weeknd", "instant: play a specific song")
         expect(acts("put on Drake") == ["play_song"], "instant: put on an artist")
         expect(acts("play some music") == ["play"] || acts("play some music") == nil, "instant: 'play some music' is not a song search")

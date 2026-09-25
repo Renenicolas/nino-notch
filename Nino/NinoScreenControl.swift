@@ -70,18 +70,24 @@ final class NinoScreenControl: ObservableObject {
             requestAccessibility()
         }
 
+        // Rene's rule: never take him off his screen unless HIS words ask for it
+        // ("switch to", "show", "bring up", "take me to"...). Enforced here, whatever
+        // the rules or the AI decided: without those words, nothing comes to the front.
+        let frontBefore = NSWorkspace.shared.frontmostApplication
+        let wantsFront = Self.asksForFocus(text)
+        let steps = decision.steps.map { step in
+            guard !wantsFront, step.action == "focus_app" else { return step }
+            return Step(action: "open_app", app: step.app, query: step.query)
+        }
+
         entry.decidedBy = decision.by
-        entry.plan = decision.steps
+        entry.plan = steps
         entries.insert(entry, at: 0)
         entries = Array(entries.prefix(8))
-
-        // Stay where Rene is working: only "switch to X" may change the front app.
-        let frontBefore = NSWorkspace.shared.frontmostApplication
-        let wantsFront = decision.steps.contains { $0.action == "focus_app" || $0.action == "open_url" }
         var notes: [String] = []
         var allOK = true
-        for step in decision.steps {
-            let (ok, note) = await Self.run(step)
+        for step in steps {
+            let (ok, note) = await Self.run(step, inFront: wantsFront)
             notes.append(note)
             allOK = allOK && ok
             if !ok { break }
@@ -151,7 +157,14 @@ final class NinoScreenControl: ObservableObject {
 
     // MARK: Do
 
-    nonisolated static func run(_ step: Step) async -> (Bool, String) {
+    /// Words that mean "take me there". Without one of them, nothing comes to the front.
+    nonisolated static func asksForFocus(_ text: String) -> Bool {
+        let t = text.lowercased()
+        return t.range(of: #"\b(switch to|switch over to|show me|show|bring up|bring me to|pull up|take me to|go to|focus on|put .+ in front|in front|on screen)\b"#,
+                       options: .regularExpression) != nil
+    }
+
+    nonisolated static func run(_ step: Step, inFront: Bool = false) async -> (Bool, String) {
         guard let action = Action(rawValue: step.action) else { return (false, "can't do \(step.action) yet") }
         let app = AppTarget(step.app)
         switch action {
@@ -166,7 +179,10 @@ final class NinoScreenControl: ObservableObject {
             // Web links only: a misheard command must not open file:// or app URL schemes.
             guard let s = step.query, let url = URL(string: s.contains("://") ? s : "https://\(s)"),
                   ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return (false, "only web links") }
-            return NSWorkspace.shared.open(url) ? (true, "opened \(url.host ?? s)") : (false, "couldn't open link")
+            let config = NSWorkspace.OpenConfiguration()
+            config.activates = inFront  // a link opens behind your work unless you said "show me" / "go to"
+            return (try? await NSWorkspace.shared.open(url, configuration: config)) != nil
+                ? (true, "opened \(url.host ?? s)\(inFront ? "" : " in the background")") : (false, "couldn't open link")
         case .play_liked_songs:
             return await SpotifyControl.playLikedSongs()
         case .play, .pause, .next_track, .previous_track:
