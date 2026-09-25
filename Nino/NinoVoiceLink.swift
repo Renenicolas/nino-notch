@@ -246,9 +246,14 @@ final class NinoVoiceLink: ObservableObject {
             let wasAsking = state?.ask.visible == true
             let sawItOpen = state != nil  // the box opened while we watched (not already open when we connected)
             let oldDraft = state?.ask.draft ?? ""
+            let wasCapturing = ["starting", "recording"].contains(state?.recording ?? "")
             state = new
             if listen.active {
-                if new.recording == "recording" { listen.tick() } else { listen.stop() }
+                // End the session only when a recording that had started stops. Right after
+                // toggleRecord the engine can still send one "idle" update before "starting";
+                // that is not the end of anything (it was the second-press bug, 2026-09-24).
+                let capturing = new.recording == "starting" || new.recording == "recording"
+                if capturing { listen.tick() } else if wasCapturing { listen.stop() }
             }
             if new.ask.visible, !new.ask.draft.isEmpty, new.ask.draft != oldDraft {
                 routeSpokenDraft(new.ask.draft)
@@ -421,7 +426,18 @@ final class NinoVoiceLink: ObservableObject {
             let down = event.modifierFlags.contains(.command)
             Task { @MainActor in NinoVoiceLink.shared.rightCommand(down: down) }
         }
+        // While Ask Nino is open the notch window is key, so the press is delivered
+        // to Nino Notch itself, and a GLOBAL monitor never sees events sent to its
+        // own app. The local monitor covers that case.
+        rightCommandLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
+            if event.keyCode == 54 {
+                let down = event.modifierFlags.contains(.command)
+                Task { @MainActor in NinoVoiceLink.shared.rightCommand(down: down) }
+            }
+            return event
+        }
     }
+    private var rightCommandLocalMonitor: Any?
 
     private func rightCommand(down: Bool) {
         if down {

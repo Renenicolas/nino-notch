@@ -123,7 +123,7 @@ keychain-blocked polish runs). Delete them in History if you like.
 
 | # | Capability | Where it lives | Verified |
 |---|---|---|---|
-| R2 | Right ⌘ stages: press 1 → "Listening…" + live words; press 2 → stops, sends, stays open on "Thinking…", then "Done: …" or the answer; press 3 or Esc closes; auto-close 4 s after a computer command | `NinoVoiceLink` (stage, second press acts on key RELEASE + 0.4 s), `AskNinoPanel.stageRow` | LIVE — voice "Pause the music": Listening with live words → "Done" → closed on its own 4.4 s later (screenshots `docs/screenshots/ask-*.png`). Root cause of the old close: Nino Voice fires Ask on key release; if the recording had already finished it read the press as "close" |
+| R2 | Right ⌘ stages (physical presses LIVE, see note below): press 1 → "Listening…" + live words; press 2 → stops, sends, stays open on "Thinking…", then "Done: …" or the answer; press 3 or Esc closes; auto-close 4 s after a computer command | `NinoVoiceLink` (stage, second press acts on key RELEASE + 0.4 s), `AskNinoPanel.stageRow` | LIVE — voice "Pause the music": Listening with live words → "Done" → closed on its own 4.4 s later (screenshots `docs/screenshots/ask-*.png`). Root cause of the old close: Nino Voice fires Ask on key release; if the recording had already finished it read the press as "close" |
 | F1 | Instant computer commands, no AI: play, pause, next/skip, previous/back, volume up/down ("turn it up"), mute, open [installed app], play my Liked Songs, and "and"-combinations | `QuickCommand` in `Nino/NinoScreenControl.swift` | LIVE — see timings; 17 phrasing checks in the contract, incl. "a half-heard 'play my' is not guessed" |
 | F2 | Unusual commands → Claude CLI on Haiku (was Haiku before too), now started without hooks/plugins/MCP/skills/tools/session | `ClaudeCommandParser` | LIVE — "bump the volume up a little" |
 | Q1 | Time in a city answered on the Mac (time-zone database) | `QuickAnswer.timeAnswer` | LIVE — Beirut |
@@ -140,4 +140,13 @@ keychain-blocked polish runs). Delete them in History if you like.
 | "bump the volume up a little" (unusual) | 7.5–8.1 s | **6.98 s** | Haiku, lean start |
 | "what time is it in Beirut" | 12 s best, 37–70 s typical, 180 s+ worst | **0.04 s** | on the Mac |
 | "who wrote the novel Dune?" | full agent (12–70 s) | **first words 2.5 s, done 3.3 s** | Haiku, streamed |
+
+**Right ⌘ physical-press fix (2026-09-24, debugged live with timestamped logs):** two bugs, both in Nino Notch.
+1. While Ask Nino is open the notch window is key, so the second press is delivered to Nino Notch itself, and a
+   *global* key monitor never sees its own app's events. Added a local monitor next to the global one.
+2. Right after `toggleRecord` Nino Voice can send one more "idle" update before "starting"; Nino Notch read it as
+   "recording ended" and switched listening off 0.1 s after starting it. Now it only ends when a recording that
+   had started stops.
+Result: physical Right ⌘ → speak → Right ⌘ stopped and sent in 2 of 2 rounds with Rene (one question routed to
+the full agent, "What time is it in Beirut?" answered instantly). Temporary logging removed.
 
